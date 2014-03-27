@@ -27,8 +27,9 @@
   	<url>http://sce.umkc.edu</url>
   </organization>
   <scm>
-  	<url>http://www.github.com/rlinneman/cs5574</url>
+  	<url>https://github.com/rlinneman/cs5574.git</url>
   	<tag>RDF SPARQL Hbase Hadoop Jena NOSQL</tag>
+  	<developerConnection>Ryan Linneman</developerConnection>
   </scm>
   <description>This is a group project to accept a serialized RDF graph and project the graph into a NOSQL back end for persistence.  Then to accept SPARQL queries and translate them into an appropriate NOSQL query, execute it, and yield back the results.</description>
 </project>
