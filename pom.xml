@@ -1,0 +1,34 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>edu.umkc.sce</groupId>
+  <artifactId>cs5574</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>cs5574</name>
+  <url>http://www.github.com/rlinneman/cs5574</url>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  <organization>
+  	<name>University of Missouri - Kansas City</name>
+  	<url>http://sce.umkc.edu</url>
+  </organization>
+  <scm>
+  	<url>http://www.github.com/rlinneman/cs5574</url>
+  	<tag>RDF SPARQL Hbase Hadoop Jena NOSQL</tag>
+  </scm>
+  <description>This is a group project to accept a serialized RDF graph and project the graph into a NOSQL back end for persistence.  Then to accept SPARQL queries and translate them into an appropriate NOSQL query, execute it, and yield back the results.</description>
+</project>
