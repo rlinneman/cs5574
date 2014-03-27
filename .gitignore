@@ -1,14 +1,16 @@
 *.class
+
+# Eclipse IDE directories #
 .metadata/
+.settings/ 
+
 # Package Files #
 *.jar
 *.war
 *.ear
 
-# ignore all bin directories
-# matches "bin" in any subfolder
-bin/
 
+bin/
 # ignore all target directories
 target/
 
