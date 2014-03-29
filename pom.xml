@@ -83,6 +83,11 @@
     	<artifactId>hbase-client</artifactId>
     	<version>${hbase.version}</version>
     </dependency>
+    <dependency>
+    	<groupId>org.apache.jena</groupId>
+    	<artifactId>jena-sdb</artifactId>
+    	<version>1.4.1</version>
+    </dependency>
   </dependencies>
   <organization>
   	<name>University of Missouri - Kansas City</name>
