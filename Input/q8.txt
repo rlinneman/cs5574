@@ -1,0 +1,9 @@
+select ?x ?z ?a
+where
+{
+ ?x <http://purl.uniprot.org/core/reviewed> ?y .
+ ?x <http://purl.uniprot.org/core/created> ?b .
+ ?x <http://purl.uniprot.org/core/mnemonic> "003L_IIV3" .
+ ?x <http://purl.uniprot.org/core/citation> ?z .
+ ?z <http://purl.uniprot.org/core/author> ?a .
+}

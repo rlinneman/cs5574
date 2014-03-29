@@ -1,0 +1,5 @@
+select ?a
+where
+{
+ <http://purl.uniprot.org/citations/7934828> <http://purl.uniprot.org/core/author> ?a .
+}

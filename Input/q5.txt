@@ -1,0 +1,7 @@
+select ?x ?y ?z
+where
+{
+ ?x <http://purl.uniprot.org/core/name> "Science" .
+ ?x <http://purl.uniprot.org/core/author> ?y .
+ ?z <http://purl.uniprot.org/core/citation> ?x .
+}

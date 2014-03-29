@@ -1,0 +1,6 @@
+select ?a ?b
+where
+{
+ ?x ?y <http://purl.uniprot.org/citations/15165820> .
+ ?a ?b ?y .
+}

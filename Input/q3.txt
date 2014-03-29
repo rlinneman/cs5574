@@ -1,0 +1,6 @@
+select ?x ?y
+where
+{
+ ?x <http://purl.uniprot.org/core/name> "Virology" .
+ ?x <http://purl.uniprot.org/core/volume> ?y .
+}

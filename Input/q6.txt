@@ -1,0 +1,6 @@
+select ?x ?y
+where
+{
+ ?x ?y "Israni S." .
+ <http://purl.uniprot.org/citations/15372022> ?y "Gomez M." .
+}

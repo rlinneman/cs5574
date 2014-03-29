@@ -1,0 +1,5 @@
+select ?p ?o
+where
+{
+ <http://purl.uniprot.org/uniprot/Q6GZX4> ?p ?o .
+}
