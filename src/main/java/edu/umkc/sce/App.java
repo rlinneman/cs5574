@@ -46,7 +46,7 @@ import com.hp.hpl.jena.rdf.model.StmtIterator;
 public class App extends Configured implements Tool {
 	private static final String MY_NAMESPACE = "foo";
 
-	public static void main(String[] args) {
+	public static void main(String[] args) {		
 		Configuration conf = new Configuration();
 		int result;
 		try {
@@ -64,11 +64,12 @@ public class App extends Configured implements Tool {
 		args = parser.getRemainingArgs();
 		if (args.length != 1) {
 			GenericOptionsParser.printGenericCommandUsage(System.out);
+
+			truncate(getAdmin().listTableNamesByNamespace(MY_NAMESPACE));
 			System.exit(2);
 		}
 
 		String importFile = args[0];
-
 		FileSystem fs = null;
 		BufferedReader br = null;
 		Model m = null;
