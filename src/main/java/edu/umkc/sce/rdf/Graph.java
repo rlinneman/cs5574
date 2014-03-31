@@ -77,10 +77,6 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 		return this.prefixMapping;
 	}
 
-	private void assertTables(Triple t) {
-
-	}
-
 	public static String getNameOfNode(Node node) {
 		String pred = null;
 		if (node.isURI())
@@ -111,7 +107,6 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 	public void add(Triple t) throws AddDeniedException {
 		System.out.println("add(Triple)");
 
-		assertTables(t);
 		// totalTriples++ ;
 		Node[] row = new Node[] { t.getSubject(), t.getPredicate(),
 				t.getObject() };
@@ -120,8 +115,11 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 		int start = (row.length == 3) ? 0 : 1;
 
 		for (int i = 0; i < 2; i++) {
-			TableName tableName = TableName.valueOf("rdf", name() + "-"
-					+ prefixAndPred[0] + "-" + prefixAndPred[1]
+			// TableName tableName = TableName.valueOf("rdf", name() + "-"
+			// + prefixAndPred[0] + "-" + prefixAndPred[1]
+			// + (i == 0 ? "subjects" : "objects"));
+			TableName tableName = TableName.valueOf("rdf", prefixAndPred[0]
+					+ "-" + prefixAndPred[1] + "-"
 					+ (i == 0 ? "subjects" : "objects"));
 			try {
 				HTableDescriptor htd;
@@ -130,7 +128,8 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 				try {
 					createTable(tableName, admin);
 				} catch (IOException e1) {
-					throw new AddDeniedException("Error while creating table", t);
+					throw new AddDeniedException("Error while creating table",
+							t);
 				}
 			} catch (IOException e) {
 				throw new AddDeniedException("Unable to create table", t);
@@ -139,12 +138,13 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 			try {
 				ht = new HTable(tableName, admin.getConnection());
 			} catch (IOException e) {
-				throw new AddDeniedException("unable to use table", t);
+				throw new AddDeniedException(String.format(
+						"unable to use table %s:%s",
+						tableName.getNamespaceAsString(),
+						tableName.getNameAsString()), t);
 			}
 
 			try {
-				// FIXME: get ht
-
 				byte[] bytes = null;
 				if (i == 0)
 					bytes = Bytes.toBytes(row[start].toString());
@@ -200,10 +200,6 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 		table = new HTable(tableName, admin.getConnection());
 		table.setAutoFlush(false, true);
 		return table;
-	}
-
-	private String name() {
-		return "tbl";
 	}
 
 	public void delete(Triple t) throws DeleteDeniedException {
