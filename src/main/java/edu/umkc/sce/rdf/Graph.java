@@ -1,18 +1,11 @@
 package edu.umkc.sce.rdf;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
@@ -22,10 +15,7 @@ import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.jboss.netty.util.internal.StringUtil;
-
 import com.hp.hpl.jena.graph.BulkUpdateHandler;
 import com.hp.hpl.jena.graph.Capabilities;
 import com.hp.hpl.jena.graph.GraphEventManager;
@@ -37,7 +27,6 @@ import com.hp.hpl.jena.graph.TripleMatch;
 import com.hp.hpl.jena.shared.AddDeniedException;
 import com.hp.hpl.jena.shared.DeleteDeniedException;
 import com.hp.hpl.jena.shared.PrefixMapping;
-import com.hp.hpl.jena.sparql.util.StringUtils;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
 import com.hp.hpl.jena.util.iterator.NullIterator;
 
@@ -399,9 +388,41 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 	public ExtendedIterator<Triple> find(Node s, Node p, Node o) {
 		System.out.println("find(Node,Node,Node)");
 		// TODO: implement query
-		if(p.isConcrete()){
+		if (p.isConcrete()) {
 			// perform gets
-		}else{
+			TableName tableName;
+			if (s.isConcrete()) {
+				tableName = getTableName(TableAxis.Subject, p);
+				Get get = new Get(s.toString().getBytes());
+				if (o.isConcrete()) {
+					get.addColumn("nodes".getBytes(), o.toString().getBytes());
+				} else {
+					get.addFamily("nodes".getBytes());
+				}
+				HTable table;
+				try {
+					table = getTable(tableName);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					return NullIterator.instance();
+				}
+				Result getResult = null;
+				try {
+					getResult = table.get(get);
+
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				if (getResult == null || getResult.isEmpty()) {
+					return NullIterator.instance();
+				}
+
+				return new ResultIterator(getResult, s, p, o, p.toString(),
+						"nodes");
+			}
+		} else {
 			// perform scans
 		}
 		return null;
