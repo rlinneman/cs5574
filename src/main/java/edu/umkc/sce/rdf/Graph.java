@@ -1,6 +1,10 @@
 package edu.umkc.sce.rdf;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.HColumnDescriptor;
@@ -105,13 +109,10 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 	private long totalSize = 0L;
 
 	public void add(Triple t) throws AddDeniedException {
-		System.out.println("add(Triple)");
-
 		// totalTriples++ ;
 		Node[] row = new Node[] { t.getSubject(), t.getPredicate(),
 				t.getObject() };
 		String[] prefixAndPred = getPrefixAndPred(row).split("~");
-
 		int start = (row.length == 3) ? 0 : 1;
 
 		for (int i = 0; i < 2; i++) {
@@ -121,6 +122,8 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 			TableName tableName = TableName.valueOf("rdf", prefixAndPred[0]
 					+ "-" + prefixAndPred[1] + "-"
 					+ (i == 0 ? "subjects" : "objects"));
+
+			System.out.printf("add(Triple) [%s]\n", tableName.getNameAsString());
 			try {
 				HTableDescriptor htd;
 				htd = admin.getTableDescriptor(tableName);
@@ -144,7 +147,6 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 						tableName.getNameAsString()), t);
 			}
 
-			try {
 				byte[] bytes = null;
 				if (i == 0)
 					bytes = Bytes.toBytes(row[start].toString());
@@ -162,26 +164,42 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 				totalSize += colQualBytes.length;
 
 				update.add(colFamilyBytes, colQualBytes, Bytes.toBytes(""));
-				ht.checkAndPut(bytes, colFamilyBytes, colQualBytes, null,
-						update);
-
+				put(ht, update, bytes, colFamilyBytes, colQualBytes);
+				
 				update = null;
 				bytes = null;
 				colFamilyBytes = null;
 				colQualBytes = null;
-			} catch (IOException e) {
-				throw new AddDeniedException("", t);
-			} finally {
+			
+		}
+		prefixAndPred = null;
+
+	}
+	
+	final ExecutorService executor = Executors.newFixedThreadPool(15);
+	
+	private void put(final HTable table, final Put update, final byte[] bytes, final byte[] colFamilyBytes, final byte[] colQualBytes){
+		executor.execute(new Runnable(){
+
+			public void run() {
 				try {
-					ht.close();
+					table.checkAndPut(bytes, colFamilyBytes, colQualBytes, null,
+							update);
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
+				finally				{
+				try {
+					table.close();
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				}
 			}
-		}
-		prefixAndPred = null;
-
+			
+		});
 	}
 
 	private HTable createTable(TableName tableName, HBaseAdmin admin)
@@ -259,6 +277,13 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 
 	public boolean isClosed() {
 		System.out.println("isClosed");
+		try {
+			executor.shutdown();
+			executor.awaitTermination(1,TimeUnit.HOURS);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return false;
 	}
 }
