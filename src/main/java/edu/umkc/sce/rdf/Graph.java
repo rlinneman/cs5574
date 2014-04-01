@@ -1,6 +1,12 @@
 package edu.umkc.sce.rdf;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -11,10 +17,14 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.TableNotFoundException;
+import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.jboss.netty.util.internal.StringUtil;
 
 import com.hp.hpl.jena.graph.BulkUpdateHandler;
 import com.hp.hpl.jena.graph.Capabilities;
@@ -27,10 +37,13 @@ import com.hp.hpl.jena.graph.TripleMatch;
 import com.hp.hpl.jena.shared.AddDeniedException;
 import com.hp.hpl.jena.shared.DeleteDeniedException;
 import com.hp.hpl.jena.shared.PrefixMapping;
+import com.hp.hpl.jena.sparql.util.StringUtils;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
+import com.hp.hpl.jena.util.iterator.NullIterator;
 
 public class Graph implements com.hp.hpl.jena.graph.Graph {
 
+	private String name;
 	private HBaseAdmin admin;
 	private Store store;
 	private PrefixMapping prefixMapping;
@@ -40,7 +53,7 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 	public Graph(Store store, HBaseAdmin admin) {
 		this.store = store;
 		this.prefixMapping = new edu.umkc.sce.rdf.PrefixMapping(null, null);
-		this.transactionHandler = new TxHandler();
+		this.transactionHandler = new TxHandler(this);
 		this.graphEventManager = new GraphEventMgr();
 		this.admin = admin;
 		System.out.println("CTOR");
@@ -94,111 +107,92 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 		return pred;
 	}
 
-	private String getPrefixAndPred(Node... row) {
-		String prefix = null, pred = null;
-		if (row.length == 4) {
-			prefix = row[0].getLocalName();
-			pred = getNameOfNode(row[2]);
-		} else {
-			prefix = "tbl";
-			pred = getNameOfNode(row[1]);
-		}
-		return prefix + "~" + pred;
-	}
+	private HashMap<TableName, HTable> tables = new HashMap<TableName, HTable>();
 
-	private long totalSize = 0L;
+	private static final TableAxis[] coreAxis = new TableAxis[] {
+			TableAxis.Subject, TableAxis.Object };
 
 	public void add(Triple t) throws AddDeniedException {
-		// totalTriples++ ;
-		Node[] row = new Node[] { t.getSubject(), t.getPredicate(),
-				t.getObject() };
-		String[] prefixAndPred = getPrefixAndPred(row).split("~");
-		int start = (row.length == 3) ? 0 : 1;
+		Node s = t.getSubject(), p = t.getPredicate(), o = t.getObject();
 
-		for (int i = 0; i < 2; i++) {
-			// TableName tableName = TableName.valueOf("rdf", name() + "-"
-			// + prefixAndPred[0] + "-" + prefixAndPred[1]
-			// + (i == 0 ? "subjects" : "objects"));
-			TableName tableName = TableName.valueOf("rdf", prefixAndPred[0]
-					+ "-" + prefixAndPred[1] + "-"
-					+ (i == 0 ? "subjects" : "objects"));
+		for (TableAxis axis : coreAxis) {
+			TableName tableName = getTableName(axis, p);
 
-			System.out.printf("add(Triple) [%s]\n", tableName.getNameAsString());
-			try {
-				HTableDescriptor htd;
-				htd = admin.getTableDescriptor(tableName);
-			} catch (TableNotFoundException e) {
-				try {
-					createTable(tableName, admin);
-				} catch (IOException e1) {
-					throw new AddDeniedException("Error while creating table",
-							t);
-				}
-			} catch (IOException e) {
-				throw new AddDeniedException("Unable to create table", t);
-			}
 			HTable ht;
 			try {
-				ht = new HTable(tableName, admin.getConnection());
+				ht = getTable(tableName);
 			} catch (IOException e) {
-				throw new AddDeniedException(String.format(
-						"unable to use table %s:%s",
-						tableName.getNamespaceAsString(),
-						tableName.getNameAsString()), t);
+				throw new AddDeniedException("IOException while adding triple",
+						t);
 			}
 
-				byte[] bytes = null;
-				if (i == 0)
-					bytes = Bytes.toBytes(row[start].toString());
-				else
-					bytes = Bytes.toBytes(row[i + 1 + start].toString());
-				totalSize += bytes.length;
-				Put update = new Put(bytes);
-				byte[] colFamilyBytes = "nodes".getBytes(), colQualBytes = null;
-				if (i == 0)
-					colQualBytes = Bytes.toBytes(row[2 + start].toString());
-				else if (start == 0)
-					colQualBytes = Bytes.toBytes(row[0].toString());
-				else
-					colQualBytes = Bytes.toBytes(row[1].toString());
-				totalSize += colQualBytes.length;
+			byte[] rowKey = null;
 
-				update.add(colFamilyBytes, colQualBytes, Bytes.toBytes(""));
-				put(ht, update, bytes, colFamilyBytes, colQualBytes);
-				
-				update = null;
-				bytes = null;
-				colFamilyBytes = null;
-				colQualBytes = null;
-			
+			if (axis == TableAxis.Subject)
+				rowKey = Bytes.toBytes(s.toString());
+			else
+				rowKey = Bytes.toBytes(o.toString());
+
+			Put update = new Put(rowKey);
+			byte[] colFamilyBytes = "nodes".getBytes(), colQualBytes = null;
+			if (axis == TableAxis.Subject)
+				colQualBytes = Bytes.toBytes(o.toString());
+			else
+				colQualBytes = Bytes.toBytes(s.toString());
+
+			update.add(colFamilyBytes, colQualBytes, Bytes.toBytes(""));
+			put(ht, update, rowKey, colFamilyBytes, colQualBytes);
+
+			update = null;
+			rowKey = null;
+			colFamilyBytes = null;
+			colQualBytes = null;
+
 		}
-		prefixAndPred = null;
-
 	}
-	
+
+	private HTable getTable(TableName tableName) throws IOException {
+		HTable ht = null;
+		if (tables.containsKey(tableName)) {
+			ht = tables.get(tableName);
+		} else {
+
+			try {
+				HTableDescriptor htd = admin.getTableDescriptor(tableName);
+			} catch (TableNotFoundException e) {
+				ht = createTable(tableName, admin);
+			}
+
+			ht = new HTable(tableName, admin.getConnection());
+
+			tables.put(tableName, ht);
+		}
+		return ht;
+	}
+
 	final ExecutorService executor = Executors.newFixedThreadPool(15);
-	
-	private void put(final HTable table, final Put update, final byte[] bytes, final byte[] colFamilyBytes, final byte[] colQualBytes){
-		executor.execute(new Runnable(){
+
+	private void put(final HTable table, final Put update, final byte[] bytes,
+			final byte[] colFamilyBytes, final byte[] colQualBytes) {
+		executor.execute(new Runnable() {
 
 			public void run() {
 				try {
-					table.checkAndPut(bytes, colFamilyBytes, colQualBytes, null,
-							update);
+					table.checkAndPut(bytes, colFamilyBytes, colQualBytes,
+							null, update);
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
-				}
-				finally				{
-				try {
-					table.close();
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
+				} finally {
+					try {
+						table.close();
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 				}
 			}
-			
+
 		});
 	}
 
@@ -227,11 +221,189 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 
 	public ExtendedIterator<Triple> find(TripleMatch m) {
 		System.out.println("find(TripleMatch)");
-		return null;
+		ExtendedIterator<Triple> trIter = NullIterator.instance();
+
+		// Node s = m.getMatchSubject();
+		// Node p = m.getMatchPredicate();
+		// Node o = m.getMatchObject();
+		//
+		// // FIXME More robust resolution of axis
+		// TableAxis axis = (o==null || !o.isConcrete()
+		// ?TableAxis.Subject:TableAxis.Object);
+		//
+		//
+		//
+		// try {
+		// if(axis == TableAxis.Subject){
+		//
+		// Get res = new Get(Bytes.toBytes(s.toString()));
+		// if (p.isConcrete()) {
+		// TableName tableName = getTableName(axis, p);
+		//
+		// HTable table = getTable(tableName);
+		//
+		// Result rr = null;
+		// if (table != null)
+		// rr = table.get(res);
+		// if (rr != null && !rr.isEmpty())
+		// // XXX
+		// trIter = null;
+		// // rr. new HBaseRdfSingleRowIterator(rr, sm, pm, om,
+		// // pm.toString(),
+		// // TableDescVPCommon.COL_FAMILY_NAME_STR);
+		// } else {
+		// trIter = null; // new HBaseRdfAllTablesIterator();
+		// // Iterate over all tables to find all triples for the
+		// // subject
+		// assertAllTables();
+		// for(TableName tableName:tables.keySet()){
+		// if(!isOnAxis(axis, tableName))
+		// continue;
+		//
+		// HTable table = tables.get(tableName);
+		//
+		// Result rr = null;
+		// if (table != null)
+		// rr = table.get(res);
+		// if (rr != null && !rr.isEmpty())
+		// // XXX
+		// trIter = null;
+		// // ((HBaseRdfAllTablesIterator) trIter)
+		// // .addIter(new HBaseRdfSingleRowIterator(
+		// // rr,
+		// // sm,
+		// // pm,
+		// // om,
+		// // getPredicateMapping(tblName),
+		// // TableDescVPCommon.COL_FAMILY_NAME_STR));
+		// }
+		// }
+		// res = null;
+		// } else if (axis == TableAxis.Object) {
+		//
+		// Get res = new Get(Bytes.toBytes(o.toString()));
+		// if (p.isConcrete()) {
+		// TableName tableName = getTableName(axis, p);
+		//
+		// HTable table = getTable(tableName);
+		//
+		// Result rr = null;
+		// if (table != null)
+		// rr = table.get(res);
+		// if (rr != null && !rr.isEmpty())
+		// // XXX
+		// trIter = null;
+		// // trIter = new HBaseRdfSingleRowIterator(rr, sm, pm, om,
+		// // pm.toString(),
+		// // TableDescVPCommon.COL_FAMILY_NAME_STR);
+		// } else {
+		// trIter = new HBaseRdfAllTablesIterator();
+		// // Iterate over all tables to find all triples for the
+		// // subject
+		// Iterator<String> iterTblNames = tables().keySet()
+		// .iterator();
+		// while (iterTblNames.hasNext()) {
+		// String tblName = iterTblNames.next();
+		// String mapPrefix = processTblName(tblName, tblPrefix,
+		// "objects", "subjects");
+		// if (mapPrefix == null)
+		// continue;
+		// HTable table = tables().get(tblName);
+		// Result rr = null;
+		// if (table != null)
+		// rr = table.get(res);
+		// if (rr != null && !rr.isEmpty())
+		// ((HBaseRdfAllTablesIterator) trIter)
+		// .addIter(new HBaseRdfSingleRowIterator(
+		// rr,
+		// sm,
+		// pm,
+		// om,
+		// getPredicateMapping(tblName),
+		// TableDescVPCommon.COL_FAMILY_NAME_STR));
+		// tblName = null;
+		// mapPrefix = null;
+		// }
+		// ((HBaseRdfAllTablesIterator) trIter).closeIter();
+		// }
+		// res = null;
+		// } else if (tblType.equalsIgnoreCase("pred")) {
+		// // Create an iterator over all rows in the subject's HTable
+		// Scan scanner = new Scan();
+		// HTable table = tables().get(
+		// name() + "-" + tblPrefix + "-"
+		// + HBaseUtils.getNameOfNode(pm) + "-subjects");
+		// if (table != null)
+		// trIter = new HBaseRdfSingleTableIterator(
+		// table.getScanner(scanner), sm, pm, om,
+		// pm.toString(),
+		// TableDescVPCommon.COL_FAMILY_NAME_STR);
+		// } else if (tblType.equalsIgnoreCase("all")) {
+		// trIter = new HBaseRdfAllTablesIterator();
+		// // Iterate over all tables to find all triples for the subject
+		// Iterator<String> iterTblNames = tables().keySet().iterator();
+		// while (iterTblNames.hasNext()) {
+		// String tblName = iterTblNames.next();
+		// String mapPrefix = processTblName(tblName, tblPrefix,
+		// "subjects", "objects");
+		// if (mapPrefix == null)
+		// continue;
+		// HTable table = tables().get(tblName);
+		// Scan scanner = new Scan();
+		// if (table != null)
+		// ((HBaseRdfAllTablesIterator) trIter)
+		// .addIter(new HBaseRdfSingleTableIterator(table
+		// .getScanner(scanner), sm, pm, om,
+		// getPredicateMapping(tblName),
+		// TableDescVPCommon.COL_FAMILY_NAME_STR));
+		// tblName = null;
+		// mapPrefix = null;
+		// }
+		// ((HBaseRdfAllTablesIterator) trIter).closeIter();
+		// }
+		// sb = null;
+		// } catch (Exception e) {
+		// throw new HBaseRdfException("Error in querying tables", e);
+		// }
+		return trIter;
+	}
+
+	private boolean isOnAxis(TableAxis axis, TableName name) {
+		return name.getNameAsString().endsWith(axis.toString().toLowerCase());
+	}
+
+	private boolean allTableNamesLoaded;
+
+	private synchronized void assertAllTables() throws IOException {
+		if (!allTableNamesLoaded) {
+			for (TableName tableName : admin.listTableNames()) {
+				if (!tables.containsKey(tableName)) {
+					tables.put(tableName,
+							new HTable(tableName, admin.getConnection()));
+				}
+			}
+			allTableNamesLoaded = true;
+		}
+	}
+
+	private TableName getTableName(TableAxis axis, Node node) {
+		StringBuilder nameBuilder = new StringBuilder();
+
+		nameBuilder.append("tbl-").append(getNameOfNode(node)).append("-")
+				.append(axis.toString().toLowerCase());
+
+		TableName tableName = TableName.valueOf("rdf", nameBuilder.toString());
+		return tableName;
 	}
 
 	public ExtendedIterator<Triple> find(Node s, Node p, Node o) {
 		System.out.println("find(Node,Node,Node)");
+		// TODO: implement query
+		if(p.isConcrete()){
+			// perform gets
+		}else{
+			// perform scans
+		}
 		return null;
 	}
 
@@ -279,11 +451,15 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 		System.out.println("isClosed");
 		try {
 			executor.shutdown();
-			executor.awaitTermination(1,TimeUnit.HOURS);
+			executor.awaitTermination(1, TimeUnit.HOURS);
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return false;
+	}
+
+	public void sync() {
+
 	}
 }
