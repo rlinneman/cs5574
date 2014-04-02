@@ -1,6 +1,7 @@
 package edu.umkc.sce.rdf;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,6 +17,7 @@ import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.RetriesExhaustedWithDetailsException;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
 
@@ -41,7 +43,7 @@ public class RdfTable implements Table {
 		this.tableName = tableName;
 		this.admin = admin;
 		this.predicate = predicate;
-		this.axis = tableName.getNamespaceAsString().endsWith(
+		this.axis = tableName.getNameAsString().endsWith(
 				TableAxis.Subject.toString().toLowerCase()) ? TableAxis.Subject
 				: TableAxis.Object;
 	}
@@ -67,13 +69,13 @@ public class RdfTable implements Table {
 				get = new Get(s.toString().getBytes());
 
 				if (o.isConcrete()) {
-					get.addColumn("nodes".getBytes(), o.toString().getBytes());
+					get.addColumn(columnFamilyBytes, o.toString().getBytes());
 				} else {
-					get.addFamily("nodes".getBytes());
+					get.addFamily(columnFamilyBytes);
 				}
 			} else {
 				get = new Get(o.toString().getBytes());
-				get.addFamily("nodes".getBytes());
+				get.addFamily(columnFamilyBytes);
 			}
 			Result gr;
 
@@ -85,7 +87,7 @@ public class RdfTable implements Table {
 		} else {
 
 			Scan scan = new Scan();
-			scan.addFamily("nodes".getBytes());
+			scan.addFamily(columnFamilyBytes);
 			ResultScanner scanner;
 
 			// scan of a single subjects table
@@ -208,17 +210,33 @@ public class RdfTable implements Table {
 		Put update = new Put(rowKey);
 
 		update.add(columnFamilyBytes, colQualBytes, emptyStringBytes);
-		// try {
-		// table.checkAndPut(rowKey, columnFamilyBytes, colQualBytes, null,
-		// update);
-		// } catch (IOException e) {
-		// // TODO Auto-generated catch block
-		// e.printStackTrace();
-		// }
-		puts.add(update);
+//		try {
+//			if (!exists())
+//				create();
+//
+//			getTable(tableName).checkAndPut(rowKey, columnFamilyBytes,
+//					colQualBytes, null, update);
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+		 puts.add(update);
 		update = null;
 		rowKey = null;
 		colQualBytes = null;
+	}
+
+	public static String getNameOfNode(Node node) {
+		String pred = null;
+		if (node.isURI())
+			pred = node.getLocalName();
+		else if (node.isBlank())
+			pred = node.getBlankNodeLabel();
+		else if (node.isLiteral())
+			pred = node.getLiteralValue().toString();
+		else
+			pred = node.toString();
+		return pred;
 	}
 
 	private List<Put> puts = new ArrayList<Put>();
@@ -235,6 +253,25 @@ public class RdfTable implements Table {
 			}
 		}
 
+		if (table != null) {
+			try {
+				table.flushCommits();
+			} catch (RetriesExhaustedWithDetailsException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (InterruptedIOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public Node getPredicate() {
+		return predicate;
+	}
+
+	public TableName getName() {
+		return tableName;
 	}
 
 }

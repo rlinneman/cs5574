@@ -36,20 +36,20 @@ public class Store {
 		this.predicateMap = new PredicateMap(admin);
 	}
 
-	final ExecutorService executor = Executors.newFixedThreadPool(7);
-
 	public void format() throws IOException {
 		StopWatch sw = new StopWatch();
+		ExecutorService es = Executors.newFixedThreadPool(10);
+
 		sw.start();
 		for (TableName tableName : admin
 				.listTableNamesByNamespace(RDF_NAMESPACE)) {
 			System.out.printf("Dropping %s\n", tableName.getNameAsString());
-			deleteTable(tableName);
+			es.execute(deleteTable(tableName));
 		}
 		try {
 			System.out.print("Awaiting table drops to complete...");
-			executor.shutdown();
-			executor.awaitTermination(1, TimeUnit.HOURS);
+			es.shutdown();
+			es.awaitTermination(1, TimeUnit.HOURS);
 			sw.stop();
 			System.out.printf("%dS", sw.getTime() / 1000);
 		} catch (InterruptedException e) {
@@ -58,8 +58,8 @@ public class Store {
 		}
 	}
 
-	private void deleteTable(final TableName tableName) {
-		executor.execute(new Runnable() {
+	private Runnable deleteTable(final TableName tableName) {
+		return new Runnable() {
 
 			public void run() {
 				try {
@@ -70,12 +70,7 @@ public class Store {
 				} catch (IOException e) {
 				}
 			}
-
-		});
-	}
-
-	public void CreateTable() {
-
+		};
 	}
 
 	public Table getTable(TableAxis axis, Node predicate) throws IOException,
@@ -91,9 +86,6 @@ public class Store {
 			ht = new RdfTable(tableName, admin, predicate);
 
 			tables.put(tableName, ht);
-
-			if (!ht.exists())
-				ht.create();
 		}
 		return ht;
 	}
@@ -156,9 +148,32 @@ public class Store {
 		return result;
 	}
 
-	public synchronized void sync(){
-		for(Table table : tables.values()){
-			table.flush();
+	public synchronized void sync() {
+		ExecutorService es = Executors.newFixedThreadPool(10);
+		for (Table table : tables.values()) {
+			es.execute(
+			_sync(table)
+			);
 		}
+
+		es.shutdown();
+		try {
+			es.awaitTermination(1, TimeUnit.HOURS);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	private Runnable _sync(final Table table) {
+		return new Runnable() {
+
+			public void run() {
+				if (table.exists() || table.create()) {
+					predicateMap.put(table.getName(), table.getPredicate());
+					table.flush();
+				}
+			}
+		};
 	}
 }

@@ -26,7 +26,7 @@ public class PredicateMap {
 
 	public PredicateMap(HBaseAdmin admin) {
 		this.admin = admin;
-		mapTableName = TableName.valueOf("predicateMap".getBytes());
+		mapTableName = TableName.valueOf("rdf".getBytes(), "predicateMap".getBytes());
 		this.nodes = new HashMap<TableName, Node>();
 	}
 
@@ -34,12 +34,16 @@ public class PredicateMap {
 		if (mapTable == null) {
 			if (!admin.tableExists(mapTableName)) {
 				createTable();
+			}else{
+				mapTable = new HTable(mapTableName, admin.getConnection());
 			}
 		}
 		return mapTable;
 	}
 
 	private synchronized void createTable() throws IOException {
+		if(mapTable != null)
+			return;
 		if (!admin.tableExists(mapTableName)) {
 			HTableDescriptor htd = new HTableDescriptor(mapTableName);
 			HColumnDescriptor cf = new HColumnDescriptor(
@@ -83,7 +87,7 @@ public class PredicateMap {
 		}
 		return node;
 	}
-
+	
 	private void _put(TableName tableName, Node node) {
 		Put put = new Put(tableName.getNameAsString().getBytes());
 		put.add("predicateUris".getBytes(), "uri".getBytes(), node.getURI()
@@ -91,7 +95,7 @@ public class PredicateMap {
 		try {
 			getMapTable().checkAndPut(tableName.getNameAsString().getBytes(),
 					"predicateUris".getBytes(), "uri".getBytes(),
-					node.getURI().getBytes(), put);
+					null, put);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

@@ -39,46 +39,48 @@ public class VpQuery extends Configured implements Tool {
 
 	// start with a very basic concrete query---no variables
 	private final String[] queries = new String[] {
-			"select ?a "
-					+ "where "
-					+ "{ "
-					+ " <http://purl.uniprot.org/citations/7934828> <http://purl.uniprot.org/core/author> ?a . "
-					+ "} order by ?a",
+//			"select ?a "
+//					+ "where "
+//					+ "{ "
+//					+ " <http://purl.uniprot.org/citations/7934828> <http://purl.uniprot.org/core/author> ?a . "
+//					+ "} order by ?a",
+					// XXX
 			"select ?p ?o " + "where " + "{"
 					+ "<http://purl.uniprot.org/uniprot/Q6GZX4> ?p ?o . "
 					+ "} order by ?p",
-	// "select ?x ?y " + "where " + "{ "
-	// + " ?x <http://purl.uniprot.org/core/name> \"Virology\" . "
-	// + " ?x <http://purl.uniprot.org/core/volume> ?y . "
-	// + "} order by ?x",
-	// "select ?x ?z " + "where " + "{ "
-	// + "?x <http://purl.uniprot.org/core/name> ?y . "
-	// + "?x <http://purl.uniprot.org/core/volume> ?z . "
-	// + "?x <http://purl.uniprot.org/core/pages> \"176-186\" . "
-	// + "} order by ?x",
-	// // "select ?x ?y ?z " + "where " + "{ "
-	// // + "?x <http://purl.uniprot.org/core/name> \"Science\" . "
-	// // + "?x <http://purl.uniprot.org/core/author> ?y . "
-	// // + "?z <http://purl.uniprot.org/core/citation> ?x . " + "}",
-	// "select ?x ?y "
-	// + "where "
-	// + "{ "
-	// + "?x ?y \"Israni S.\" . "
-	// + "<http://purl.uniprot.org/citations/15372022> ?y \"Gomez M.\" . "
-	// + "} order by ?x",
-	// // "select ?a ?b " + "where " + "{ "
-	// // + "?x ?y <http://purl.uniprot.org/citations/15165820> . "
-	// // + "?a ?b ?y . " + "} ",
-	// "select ?x ?z ?a "
-	// + "where "
-	// + "{ "
-	// + "?x <http://purl.uniprot.org/core/reviewed> ?y . "
-	// + "?x <http://purl.uniprot.org/core/created> ?b . "
-	// + "?x <http://purl.uniprot.org/core/mnemonic> \"003L_IIV3\" . "
-	// + "?x <http://purl.uniprot.org/core/citation> ?z . "
-	// + "?z <http://purl.uniprot.org/core/author> ?a . "
-	// + "} order by ?x"
-	};
+//			"select ?x ?y " + "where " + "{ "
+//					+ " ?x <http://purl.uniprot.org/core/name> \"Virology\" . "
+//					+ " ?x <http://purl.uniprot.org/core/volume> ?y . "
+//					+ "} order by ?x",
+//			"select ?x ?z " + "where " + "{ "
+//					+ "?x <http://purl.uniprot.org/core/name> ?y . "
+//					+ "?x <http://purl.uniprot.org/core/volume> ?z . "
+//					+ "?x <http://purl.uniprot.org/core/pages> \"176-186\" . "
+//					+ "} order by ?x",
+//			// "select ?x ?y ?z " + "where " + "{ "
+//			// + "?x <http://purl.uniprot.org/core/name> \"Science\" . "
+//			// + "?x <http://purl.uniprot.org/core/author> ?y . "
+//			// + "?z <http://purl.uniprot.org/core/citation> ?x . " + "}",
+//					// XXX
+//			"select ?x ?y "
+//					+ "where "
+//					+ "{ "
+//					+ "?x ?y \"Israni S.\" . "
+//					+ "<http://purl.uniprot.org/citations/15372022> ?y \"Gomez M.\" . "
+//					+ "} order by ?x",
+//			// "select ?a ?b " + "where " + "{ "
+//			// + "?x ?y <http://purl.uniprot.org/citations/15165820> . "
+//			// + "?a ?b ?y . " + "} ",
+//			"select ?x ?z ?a "
+//					+ "where "
+//					+ "{ "
+//					+ "?x <http://purl.uniprot.org/core/reviewed> ?y . "
+//					+ "?x <http://purl.uniprot.org/core/created> ?b . "
+//					+ "?x <http://purl.uniprot.org/core/mnemonic> \"003L_IIV3\" . "
+//					+ "?x <http://purl.uniprot.org/core/citation> ?z . "
+//					+ "?z <http://purl.uniprot.org/core/author> ?a . "
+//					+ "} order by ?x" 
+					};
 
 	public int run(String[] args) throws Exception {
 		Configuration conf = getConf();
@@ -108,8 +110,11 @@ public class VpQuery extends Configured implements Tool {
 
 		model = createModel(store);
 		try {
-			for (String query : queries)
-				runTestQuery(model, query, m);
+			int queryIndex = 0;
+			for (String query : queries) {
+				runTestQuery(queryIndex, model, query, m);
+				queryIndex += 1;
+			}
 		} finally {
 			model.close();
 		}
@@ -126,8 +131,8 @@ public class VpQuery extends Configured implements Tool {
 		return model;
 	}
 
-	private void runTestQuery(Model model, String query, Model m) {
-		System.out.printf("executing %s", query);
+	private void runTestQuery(int queryIndex, Model model, String query, Model m) {
+		System.out.printf("executing [%d] %s", queryIndex, query);
 		QueryExecution qe = QueryExecutionFactory.create(query, m);
 		String result1, result2;
 		try {
@@ -147,12 +152,17 @@ public class VpQuery extends Configured implements Tool {
 		} finally {
 			qe.close();
 		}
+		System.out.flush();
 		if (result1.equalsIgnoreCase(result2)) {
-			System.out.printf("\nQuery passed assertion: %s \n\n", query);
+			System.out.printf("\nQuery [%d] passed assertion\n\n",
+					queryIndex);
+			
 		} else {
-			System.out.printf(
-					"\nQuery failed assertion expected:\n%s\nactual:\n%s",
-					result1, result2);
+			System.out.flush();
+			System.err.printf(
+					"\nQuery [%d] failed assertion expected:\n%s\nactual:\n%s",
+					queryIndex, result1, result2);
+			System.err.flush();
 		}
 	}
 

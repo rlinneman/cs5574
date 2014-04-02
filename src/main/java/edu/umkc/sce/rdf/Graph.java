@@ -1,6 +1,9 @@
 package edu.umkc.sce.rdf;
 
 import java.io.IOException;
+
+import org.apache.hadoop.hbase.TableName;
+
 import com.hp.hpl.jena.graph.BulkUpdateHandler;
 import com.hp.hpl.jena.graph.Capabilities;
 import com.hp.hpl.jena.graph.GraphEventManager;
@@ -84,7 +87,7 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			if (ht == null || !ht.exists() && !ht.create())
+			if (ht == null)
 				throw new AddDeniedException("Failed to create table", t);
 
 			ht.put(s, o);

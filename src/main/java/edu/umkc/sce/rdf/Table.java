@@ -1,5 +1,7 @@
 package edu.umkc.sce.rdf;
 
+import org.apache.hadoop.hbase.TableName;
+
 import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
@@ -11,5 +13,7 @@ public interface Table {
 	public boolean create();
 	public TableAxis getAxis();
 	public void flush();
+	public Node getPredicate();
+	public TableName getName();
 }
 
