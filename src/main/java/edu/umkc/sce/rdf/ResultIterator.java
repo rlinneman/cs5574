@@ -1,6 +1,8 @@
 package edu.umkc.sce.rdf;
 
 import java.util.Iterator;
+import java.util.Queue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.TableName;
@@ -13,15 +15,14 @@ import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.rdf.model.AnonId;
 import com.hp.hpl.jena.shared.impl.JenaParameters;
+import com.hp.hpl.jena.util.iterator.ExtendedIterator;
 import com.hp.hpl.jena.util.iterator.NiceIterator;
 
-class ResultTripleIterator extends NiceIterator<Triple> {
+class ResultTripleIterator implements Iterator<Triple> {
 	final Node subject, predicate, object;
 	final Result result;
 	final Iterator<byte[]> columns;
 	final String rowKey;
-
-	private Triple _next;
 
 	public ResultTripleIterator(Result result, Node subject, Node predicate,
 			Node object, TableName tableName) {
@@ -44,7 +45,6 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 	 * 
 	 * @see java.util.Iterator#hasNext()
 	 */
-	@Override
 	public boolean hasNext() {
 		boolean hasNext = columns.hasNext();
 		// System.out.printf("ResultTripleIterator:hasNext=%s\n", hasNext);
@@ -56,7 +56,6 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 	 * 
 	 * @see java.util.Iterator#next()
 	 */
-	@Override
 	public Triple next() {
 		return moveNext();
 	}
@@ -91,7 +90,7 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 			s = getNode(columnName);
 		}
 
-		_next = triple = Triple.create(s, predicate, o);
+		triple = Triple.create(s, predicate, o);
 
 		return triple;
 	}
@@ -151,7 +150,7 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 	 * 
 	 * @see java.util.Iterator#remove()
 	 */
-	@Override
+
 	public void remove() {
 		// TODO Auto-generated method stub
 		throw new UnsupportedOperationException();
@@ -159,13 +158,13 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 
 }
 
-class ResultSetTripleIterator extends NiceIterator<Triple> {
-	final Node subject, predicate, object;
-	final TableName tableName;
-	final Iterator<Result> scanner;
-	ResultTripleIterator current;
+class ResultScannerTripleIterator implements Iterator<Triple> {
+	private final Node subject, predicate, object;
+	private final TableName tableName;
+	private final Iterator<Result> scanner;
+	private ResultTripleIterator current;
 
-	public ResultSetTripleIterator(ResultScanner scanner, Node subject,
+	public ResultScannerTripleIterator(ResultScanner scanner, Node subject,
 			Node predicate, Node object, TableName tableName) {
 		this.subject = subject;
 		this.predicate = predicate;
@@ -179,7 +178,7 @@ class ResultSetTripleIterator extends NiceIterator<Triple> {
 	 * 
 	 * @see java.util.Iterator#hasNext()
 	 */
-	@Override
+
 	public boolean hasNext() {
 		boolean hasNext = scanner.hasNext()
 				|| (current != null && current.hasNext());
@@ -192,7 +191,7 @@ class ResultSetTripleIterator extends NiceIterator<Triple> {
 	 * 
 	 * @see java.util.Iterator#next()
 	 */
-	@Override
+
 	public Triple next() {
 		// System.out.println("ResultSetTripleIterator:moveNext");
 		if (current != null && current.hasNext())
@@ -211,10 +210,10 @@ class ResultSetTripleIterator extends NiceIterator<Triple> {
 	 * 
 	 * @see java.util.Iterator#remove()
 	 */
-	@Override
+
 	public void remove() {
 		// TODO Auto-generated method stub
-
+		throw new UnsupportedOperationException();
 	}
 
 }

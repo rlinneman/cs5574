@@ -16,6 +16,7 @@ import com.hp.hpl.jena.shared.AddDeniedException;
 import com.hp.hpl.jena.shared.DeleteDeniedException;
 import com.hp.hpl.jena.shared.PrefixMapping;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
+import com.hp.hpl.jena.util.iterator.NiceIterator;
 import com.hp.hpl.jena.util.iterator.NullIterator;
 import com.sun.tools.corba.se.idl.InvalidArgument;
 
@@ -100,7 +101,7 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 	}
 
 	public ExtendedIterator<Triple> find(Node s, Node p, Node o) {
-		ExtendedIterator<Triple> results = null;
+		ExtendedIterator<Triple> results = new NiceIterator<Triple>();
 		TableAxis axis = TableAxis.Subject;
 
 		// # | S | P | O | ACTION
@@ -130,11 +131,19 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 		} else {
 			// criteria {4-7}
 			for (Table table : store.allTables(axis)) {
-				if (results != null) {
-					results.andThen(table.get(s, o));
-				} else {
-					results = table.get(s, o);
+				ExtendedIterator<Triple> intermediate =table.get(s, o);
+				
+				if(intermediate.getClass()==NullIterator.class){
+					intermediate.close();
+					continue;
 				}
+				
+				results = results.andThen(intermediate);
+//				if (results != null) {
+//					results.andThen(intermediate);
+//				} else {
+//					results = intermediate;
+//				}
 			}
 		}
 		if (results == null)

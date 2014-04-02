@@ -3,7 +3,6 @@ package edu.umkc.sce.rdf;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -15,10 +14,7 @@ import org.apache.hadoop.hbase.MasterNotRunningException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
-import org.apache.hadoop.hbase.client.HTable;
-
 import com.hp.hpl.jena.graph.Node;
-import com.hp.hpl.jena.util.iterator.NullIterator;
 import com.sun.tools.corba.se.idl.InvalidArgument;
 
 public class Store {

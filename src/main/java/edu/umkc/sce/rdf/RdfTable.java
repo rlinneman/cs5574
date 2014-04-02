@@ -24,6 +24,7 @@ import org.apache.hadoop.hbase.util.Bytes;
 import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
+import com.hp.hpl.jena.util.iterator.NiceIterator;
 import com.hp.hpl.jena.util.iterator.NullIterator;
 
 public class RdfTable implements Table {
@@ -49,7 +50,7 @@ public class RdfTable implements Table {
 	}
 
 	public ExtendedIterator<Triple> get(Node s, Node o) {
-		ExtendedIterator<Triple> results = NullIterator.instance();
+		ExtendedIterator<Triple> results = new NiceIterator<Triple>();
 
 		// S | P | O | ACTION
 		// ------------------------------------------------------------
@@ -82,8 +83,8 @@ public class RdfTable implements Table {
 			// get on a specific table
 			gr = getResults(tableName, get);
 			if (gr != null)
-				results = new ResultTripleIterator(gr, s, predicate, o,
-						tableName);
+				results = results.andThen(new ResultTripleIterator(gr, s, predicate, o,
+						tableName));
 		} else {
 
 			Scan scan = new Scan();
@@ -93,8 +94,8 @@ public class RdfTable implements Table {
 			// scan of a single subjects table
 			scanner = getResults(tableName, scan);
 			if (scanner != null) {
-				results = new ResultSetTripleIterator(scanner, s, predicate, o,
-						tableName);
+				results = results.andThen(new ResultScannerTripleIterator(scanner, s, predicate, o,
+						tableName));
 			}
 
 		}
@@ -110,6 +111,7 @@ public class RdfTable implements Table {
 			table = getTable(tableName);
 
 			result = table.getScanner(scan);
+
 			return result;
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -210,17 +212,17 @@ public class RdfTable implements Table {
 		Put update = new Put(rowKey);
 
 		update.add(columnFamilyBytes, colQualBytes, emptyStringBytes);
-//		try {
-//			if (!exists())
-//				create();
-//
-//			getTable(tableName).checkAndPut(rowKey, columnFamilyBytes,
-//					colQualBytes, null, update);
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-		 puts.add(update);
+		// try {
+		// if (!exists())
+		// create();
+		//
+		// getTable(tableName).checkAndPut(rowKey, columnFamilyBytes,
+		// colQualBytes, null, update);
+		// } catch (IOException e) {
+		// // TODO Auto-generated catch block
+		// e.printStackTrace();
+		// }
+		puts.add(update);
 		update = null;
 		rowKey = null;
 		colQualBytes = null;
