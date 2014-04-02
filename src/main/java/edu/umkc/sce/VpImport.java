@@ -49,7 +49,7 @@ public class VpImport extends Configured implements Tool {
 		Store store = null;
 		store = new Store(conf);
 		store.format();
-		model = createModel(store, new HBaseAdmin(conf));
+		model = createModel(store);
 		try {
 			load(conf, model, importFile);
 		} finally {
@@ -59,10 +59,10 @@ public class VpImport extends Configured implements Tool {
 		return 0;
 	}
 
-	private Model createModel(Store store, HBaseAdmin admin) {
+	private Model createModel(Store store) {
 		Model model;
 		Graph graph;
-		graph = new edu.umkc.sce.rdf.Graph(store, admin);
+		graph = new edu.umkc.sce.rdf.Graph(store);
 		model = ModelFactory.createModelForGraph(graph);
 		
 		return model;

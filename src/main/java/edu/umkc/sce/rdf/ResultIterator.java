@@ -3,6 +3,7 @@ package edu.umkc.sce.rdf;
 import java.util.Iterator;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -23,9 +24,10 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 	private Triple _next;
 
 	public ResultTripleIterator(Result result, Node subject, Node predicate,
-			Node object) {
+			Node object, TableName tableName) {
 		this.subject = subject;
-		this.predicate = predicate;
+		this.predicate = predicate.isConcrete() ? predicate
+				: getNode(tableName);
 		this.object = object;
 		this.result = result;
 		// We use existence checks rather than values in the storage of this
@@ -44,8 +46,8 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 	 */
 	@Override
 	public boolean hasNext() {
-		boolean hasNext =columns.hasNext();
-//		System.out.printf("ResultTripleIterator:hasNext=%s\n", hasNext);
+		boolean hasNext = columns.hasNext();
+		// System.out.printf("ResultTripleIterator:hasNext=%s\n", hasNext);
 		return hasNext;
 	}
 
@@ -63,7 +65,7 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 	 * 
 	 */
 	private Triple moveNext() {
-//		System.out.println("ResultTripleIterator:moveNext");
+		// System.out.println("ResultTripleIterator:moveNext");
 		String columnName = Bytes.toString(columns.next());
 
 		// S | P | O | ACTION
@@ -78,7 +80,7 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 		// F | F | F | Scan ALL subject tables
 
 		Triple triple;
-		Node s, p, o;
+		Node s, o;
 
 		if (subject.isConcrete() || !object.isConcrete()) {
 			// where fell on the subjects axis
@@ -89,16 +91,23 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 			s = getNode(columnName);
 		}
 
-		if (predicate.isConcrete()) {
-			p = predicate;
-		} else {
-			// XXX translate tablename back into node name
-			throw new NotImplementedException();
-		}
-
-		_next = triple = Triple.create(s, p, o);
+		_next = triple = Triple.create(s, predicate, o);
 
 		return triple;
+	}
+
+	/**
+	 * A method that converts a string representation into a Node courtesy of
+	 * Copyright © 2010, 2011, 2012 Talis Systems Ltd.
+	 * 
+	 * @param strNode
+	 *            - the string representation as fetched from the HTable
+	 * @return a Node representation of the given string
+	 */
+	public static Node getNode(TableName tableName) {
+		Node node = null;
+
+		return node;
 	}
 
 	/**
@@ -152,15 +161,17 @@ class ResultTripleIterator extends NiceIterator<Triple> {
 
 class ResultSetTripleIterator extends NiceIterator<Triple> {
 	final Node subject, predicate, object;
+	final TableName tableName;
 	final Iterator<Result> scanner;
 	ResultTripleIterator current;
 
 	public ResultSetTripleIterator(ResultScanner scanner, Node subject,
-			Node predicate, Node object) {
+			Node predicate, Node object, TableName tableName) {
 		this.subject = subject;
 		this.predicate = predicate;
 		this.object = object;
 		this.scanner = scanner.iterator();
+		this.tableName = tableName;
 	}
 
 	/*
@@ -170,8 +181,9 @@ class ResultSetTripleIterator extends NiceIterator<Triple> {
 	 */
 	@Override
 	public boolean hasNext() {
-		boolean hasNext =scanner.hasNext() || (current != null && current.hasNext());
-//		System.out.printf("ResultSetTripleIterator:hasNext=%s\n", hasNext);
+		boolean hasNext = scanner.hasNext()
+				|| (current != null && current.hasNext());
+		// System.out.printf("ResultSetTripleIterator:hasNext=%s\n", hasNext);
 		return hasNext;
 	}
 
@@ -182,12 +194,12 @@ class ResultSetTripleIterator extends NiceIterator<Triple> {
 	 */
 	@Override
 	public Triple next() {
-//		System.out.println("ResultSetTripleIterator:moveNext");
+		// System.out.println("ResultSetTripleIterator:moveNext");
 		if (current != null && current.hasNext())
 			return current.next();
 		else if (hasNext()) {
 			current = new ResultTripleIterator(scanner.next(), subject,
-					predicate, object);
+					predicate, object, tableName);
 			return next();
 		} else
 			return null;
