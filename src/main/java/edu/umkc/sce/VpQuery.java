@@ -31,14 +31,26 @@ public class VpQuery extends Configured implements Tool {
 	}
 
 	// start with a very basic concrete query---no variables
-	private final String query ="SELECT ?x ?y ?z WHERE { <http://sce.umkc.edu/> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> .}"; 
+	private final String[] queries = new String[] {
+//			"SELECT ?x ?y ?z WHERE { <http://sce.umkc.edu/> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> .}",
+//			"SELECT ?x ?y ?z WHERE { <http://sce.umkc.edu/> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?z .}",
+//			"SELECT ?x ?y ?z WHERE { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> .}",
+//			"SELECT ?x ?y ?z WHERE { ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?z .}",
 
-	// "select ?x ?z ?a " + "where " + "{ "
-	// + " ?x <http://purl.uniprot.org/core/reviewed> ?y . "
-	// + " ?x <http://purl.uniprot.org/core/created> ?b . "
-	// + " ?x <http://purl.uniprot.org/core/mnemonic> \"003L_IIV3\" . "
-	// + " ?x <http://purl.uniprot.org/core/citation> ?z . "
-	// + " ?z <http://purl.uniprot.org/core/author> ?a . }";
+//			"select ?a "
+//					+ "where "
+//					+ "{ "
+//					+ "<http://purl.uniprot.org/citations/7934828> <http://purl.uniprot.org/core/author> ?a . "
+//					+ "} order by ?a",
+
+			"select ?x ?z ?a " + "where " + "{ "
+					+ " ?x <http://purl.uniprot.org/core/reviewed> ?y . "
+					+ " ?x <http://purl.uniprot.org/core/created> ?b . "
+					+ " ?x <http://purl.uniprot.org/core/mnemonic> \"003L_IIV3\" . "
+					+ " ?x <http://purl.uniprot.org/core/citation> ?z . "
+					 + " ?z <http://purl.uniprot.org/core/author> ?a . "
+					+ " } order by ?a",
+	};
 
 	public int run(String[] args) throws Exception {
 		Configuration conf = getConf();
@@ -56,25 +68,26 @@ public class VpQuery extends Configured implements Tool {
 
 		model = createModel(store, new HBaseAdmin(conf));
 		try {
-			runTestQuery(model, query);
+			for (String query : queries)
+				runTestQuery(model, query);
 		} finally {
 			model.close();
 		}
 
 		return 0;
 	}
-	
 
 	private Model createModel(Store store, HBaseAdmin admin) {
 		Model model;
 		Graph graph;
 		graph = new edu.umkc.sce.rdf.Graph(store, admin);
 		model = ModelFactory.createModelForGraph(graph);
-		
+
 		return model;
 	}
 
 	private void runTestQuery(Model model, String query) {
+		System.out.printf("executing %s", query);
 		QueryExecution qe = QueryExecutionFactory.create(query, model);
 		try {
 			ResultSet results = qe.execSelect();

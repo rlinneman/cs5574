@@ -2,6 +2,7 @@ package edu.umkc.sce.rdf;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -15,7 +16,10 @@ import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
+
 import com.hp.hpl.jena.graph.BulkUpdateHandler;
 import com.hp.hpl.jena.graph.Capabilities;
 import com.hp.hpl.jena.graph.GraphEventManager;
@@ -28,6 +32,7 @@ import com.hp.hpl.jena.shared.AddDeniedException;
 import com.hp.hpl.jena.shared.DeleteDeniedException;
 import com.hp.hpl.jena.shared.PrefixMapping;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
+import com.hp.hpl.jena.util.iterator.NiceIterator;
 import com.hp.hpl.jena.util.iterator.NullIterator;
 
 public class Graph implements com.hp.hpl.jena.graph.Graph {
@@ -386,47 +391,129 @@ public class Graph implements com.hp.hpl.jena.graph.Graph {
 	}
 
 	public ExtendedIterator<Triple> find(Node s, Node p, Node o) {
-		System.out.println("find(Node,Node,Node)");
-		// TODO: implement query
-		if (p.isConcrete()) {
-			// perform gets
-			TableName tableName;
+		ExtendedIterator<Triple> results = null;// = new
+												// ResultTripleIterator(s,p,o);
+		TableAxis axis = TableAxis.Subject; // favor the subjects table for
+											// queries
+
+		// S | P | O | ACTION
+		// ------------------------------------------------------------
+		// T | T | T | Get a subject table
+		// F | T | T | Get an object table
+		// T | T | F | Get a subject table
+		// F | T | F | Scan a subject table
+		// T | F | T | Get on ALL subject tables
+		// T | F | F | Get on ALL subject tables
+		// F | F | T | Get on ALL object tables
+		// F | F | F | Scan ALL subject tables
+
+		if (s.isConcrete() || o.isConcrete()) {
+			// get... may be across multiple tables
+			Get get;
 			if (s.isConcrete()) {
-				tableName = getTableName(TableAxis.Subject, p);
-				Get get = new Get(s.toString().getBytes());
+				get = new Get(s.toString().getBytes());
+
 				if (o.isConcrete()) {
 					get.addColumn("nodes".getBytes(), o.toString().getBytes());
 				} else {
 					get.addFamily("nodes".getBytes());
 				}
-				HTable table;
-				try {
-					table = getTable(tableName);
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-					return NullIterator.instance();
-				}
-				Result getResult = null;
-				try {
-					getResult = table.get(get);
+			} else {
+				axis = TableAxis.Object;
+				get = new Get(o.toString().getBytes());
+				get.addFamily("nodes".getBytes());
+			}
+			Result gr;
+			if (p.isConcrete()) {
+				// get on a specific table
+				TableName tableName = getTableName(axis, p);
 
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+				gr = getResults(tableName, get);
+				if (gr != null)
+					results = new ResultTripleIterator(gr, s, p, o);
+			} else {
+				// get on all tables
+				for (TableName tableName : tables.keySet()) {
+					if (!isOnAxis(axis, tableName))
+						continue;
+					gr = getResults(tableName, get);
+					if (gr != null) {
+						if (results == null) {
+							results = new ResultTripleIterator(gr, s, p, o);
+						} else {
+							results.andThen(new ResultTripleIterator(gr, s, p,
+									o));
+						}
+					}
 				}
-				if (getResult == null || getResult.isEmpty()) {
-					return NullIterator.instance();
-				}
-
-				return new ResultIterator(getResult, s, p, o, p.toString(),
-						"nodes");
 			}
 		} else {
-			// perform scans
+
+			Scan scan = new Scan();
+			scan.addFamily("nodes".getBytes());
+			ResultScanner scanner;
+
+			if (p.isConcrete()) {
+				// scan of a single subjects table
+				TableName tableName = getTableName(axis, p);
+				scanner = getResults(tableName, scan);
+				if(scanner != null){
+					results = new ResultSetTripleIterator(scanner, s, p, o);
+				}
+			} else {
+				// scan all tables
+				// get on all tables
+				for (TableName tableName : tables.keySet()) {
+					if (!isOnAxis(axis, tableName))
+						continue;
+					scanner = getResults(tableName, scan);
+				}
+			}
+
+		}
+
+		if(results == null)
+			results = NullIterator.instance();
+		return results;
+	}
+
+	private ResultScanner getResults(TableName tableName, Scan scan) {
+
+		ResultScanner result = null;
+		HTable table;
+		try {
+			table = getTable(tableName);
+
+			result = table.getScanner(scan);
+			return result;
+			// results.andThen(new ResultTripleIterator(result, s, p, o));
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 		return null;
 	}
+
+	private Result getResults(TableName tableName, Get get) {
+
+		Result result = null;
+		HTable table;
+		try {
+			table = getTable(tableName);
+
+			result = table.get(get);
+
+			if (result != null && !result.isEmpty()) {
+				return result;
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	// public Iterable<Triple> getFromTable(TableName tableName){
+	//
+	// }
 
 	public boolean isIsomorphicWith(com.hp.hpl.jena.graph.Graph g) {
 		System.out.println("isIsomorphicWith(Graph)");
