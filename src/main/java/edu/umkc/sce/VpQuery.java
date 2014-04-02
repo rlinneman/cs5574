@@ -44,7 +44,6 @@ public class VpQuery extends Configured implements Tool {
 					+ "{ "
 					+ " <http://purl.uniprot.org/citations/7934828> <http://purl.uniprot.org/core/author> ?a . "
 					+ "} order by ?a",
-					 //XXX
 			"select ?p ?o " + "where " + "{"
 					+ "<http://purl.uniprot.org/uniprot/Q6GZX4> ?p ?o . "
 					+ "} order by ?p",
@@ -57,20 +56,20 @@ public class VpQuery extends Configured implements Tool {
 					+ "?x <http://purl.uniprot.org/core/volume> ?z . "
 					+ "?x <http://purl.uniprot.org/core/pages> \"176-186\" . "
 					+ "} order by ?x",
-			// "select ?x ?y ?z " + "where " + "{ "
-			// + "?x <http://purl.uniprot.org/core/name> \"Science\" . "
-			// + "?x <http://purl.uniprot.org/core/author> ?y . "
-			// + "?z <http://purl.uniprot.org/core/citation> ?x . " + "}",
-					// XXX
+			"select ?x ?y ?z " + "where " + "{ "
+					+ "?x <http://purl.uniprot.org/core/name> \"Science\" . "
+					+ "?x <http://purl.uniprot.org/core/author> ?y . "
+					+ "?z <http://purl.uniprot.org/core/citation> ?x . "
+					+ "} order by ?x",
 			"select ?x ?y "
 					+ "where "
 					+ "{ "
 					+ "?x ?y \"Israni S.\" . "
 					+ "<http://purl.uniprot.org/citations/15372022> ?y \"Gomez M.\" . "
 					+ "} order by ?x",
-			// "select ?a ?b " + "where " + "{ "
-			// + "?x ?y <http://purl.uniprot.org/citations/15165820> . "
-			// + "?a ?b ?y . " + "} ",
+			"select ?a ?b " + "where " + "{ "
+					+ "?x ?y <http://purl.uniprot.org/citations/15165820> . "
+					+ "?a ?b ?y . " + "} order by ?x",
 			"select ?x ?z ?a "
 					+ "where "
 					+ "{ "
@@ -79,8 +78,8 @@ public class VpQuery extends Configured implements Tool {
 					+ "?x <http://purl.uniprot.org/core/mnemonic> \"003L_IIV3\" . "
 					+ "?x <http://purl.uniprot.org/core/citation> ?z . "
 					+ "?z <http://purl.uniprot.org/core/author> ?a . "
-					+ "} order by ?x" 
-					};
+					+ "} order by ?x"
+	};
 
 	public int run(String[] args) throws Exception {
 		Configuration conf = getConf();
@@ -154,14 +153,15 @@ public class VpQuery extends Configured implements Tool {
 		}
 		System.out.flush();
 		if (result1.equalsIgnoreCase(result2)) {
-			System.out.printf("\nQuery [%d] passed assertion\n\n",
-					queryIndex);
-			
+			System.out.printf("\nQuery [%d] passed assertion\n\n", queryIndex);
+
 		} else {
 			System.out.flush();
-			System.err.printf(
-					"\nQuery [%d] failed assertion expected:\n%s\nactual:\n%s",
-					queryIndex, result1, result2);
+			// System.err.printf(
+			// "\nQuery [%d] failed assertion expected:\n%s\nactual:\n%s",
+			// queryIndex, result1, result2);
+			System.err.printf("\nQuery [%d] failed assertion\n", queryIndex,
+					result1, result2);
 			System.err.flush();
 		}
 	}
