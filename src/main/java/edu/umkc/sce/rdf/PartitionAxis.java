@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Ryan Linneman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +16,6 @@
 
 package edu.umkc.sce.rdf;
 
-public enum TableAxis {
-	Any, Subject, Predicate, Object
+public enum PartitionAxis {
+	Graph, Subject, Predicate, Object
 }

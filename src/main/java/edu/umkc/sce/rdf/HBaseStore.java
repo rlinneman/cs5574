@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Ryan Linneman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,18 +33,17 @@ import org.apache.hadoop.hbase.client.HBaseAdmin;
 import com.hp.hpl.jena.graph.Node;
 import com.sun.tools.corba.se.idl.InvalidArgument;
 
-public class Store {
+public class HBaseStore {
 	private static final String RDF_NAMESPACE = "rdf";
 	private final HBaseAdmin admin;
-	private final Configuration conf;
 	private final PredicateMap predicateMap;
-	private final HashMap<TableName, Table> tables = new HashMap<TableName, Table>();
+	private final HashMap<TableName, Partition> partitions;
 	private boolean allTableNamesLoaded;
 
-	public Store(Configuration conf) throws MasterNotRunningException,
+	public HBaseStore(Configuration conf) throws MasterNotRunningException,
 			ZooKeeperConnectionException, IOException {
-		this.conf = conf;
 		this.admin = new HBaseAdmin(conf);
+		this.partitions = new HashMap<TableName, Partition>();
 		this.predicateMap = new PredicateMap(admin);
 	}
 
@@ -85,31 +84,31 @@ public class Store {
 		};
 	}
 
-	public Table getTable(TableAxis axis, Node predicate) throws IOException,
-			InvalidArgument {
+	public Partition getPartition(PartitionAxis axis, Node predicate)
+			throws IOException, InvalidArgument {
 		if (!predicate.isConcrete()) {
 			throw new InvalidArgument("node must be a concrete node");
 		}
-		Table ht = null;
+		Partition ht = null;
 		TableName tableName = getTableName(axis, predicate);
-		if (tables.containsKey(tableName)) {
-			ht = tables.get(tableName);
+		if (partitions.containsKey(tableName)) {
+			ht = partitions.get(tableName);
 		} else {
-			ht = new RdfTable(tableName, admin, predicate);
+			ht = new HBaseVerticalPartition(tableName, admin, predicate);
 
-			tables.put(tableName, ht);
+			partitions.put(tableName, ht);
 		}
 		return ht;
 	}
 
-	private synchronized void assertAllTables() throws IOException {
+	private synchronized void assertAllPartitions() throws IOException {
 		if (!allTableNamesLoaded) {
 			for (TableName tableName : admin.listTableNames()) {
-				if (!tables.containsKey(tableName)) {
+				if (!partitions.containsKey(tableName)) {
 					Node predicate = predicateMap.get(tableName);
 					if (predicate != null) {
-						tables.put(tableName, new RdfTable(tableName, admin,
-								predicate));
+						partitions.put(tableName, new HBaseVerticalPartition(
+								tableName, admin, predicate));
 					}
 				}
 			}
@@ -117,7 +116,7 @@ public class Store {
 		}
 	}
 
-	private TableName getTableName(TableAxis axis, Node node) {
+	private TableName getTableName(PartitionAxis axis, Node node) {
 		StringBuilder nameBuilder = new StringBuilder();
 
 		nameBuilder.append("tbl-").append(getNameOfNode(node)).append("-")
@@ -140,21 +139,21 @@ public class Store {
 		return pred;
 	}
 
-	public Iterable<Table> allTables(TableAxis axis) {
+	public Iterable<Partition> allPartitions(PartitionAxis axis) {
 		try {
-			// verify all tables have been loaded so that we have
+			// verify all partitions have been loaded so that we have
 			// accurate query scope
-			assertAllTables();
+			assertAllPartitions();
 		} catch (IOException e) {
 			// failed to garner query scope so bail with no results
 			return null;
 		}
 
-		List<Table> result = new ArrayList<Table>();
-		for (TableName tableName : tables.keySet()) {
-			Table table = tables.get(tableName);
-			if (table.getAxis() == axis) {
-				result.add(table);
+		List<Partition> result = new ArrayList<Partition>();
+		for (TableName tableName : partitions.keySet()) {
+			Partition partition = partitions.get(tableName);
+			if (partition.getAxis() == axis) {
+				result.add(partition);
 			}
 		}
 		return result;
@@ -162,10 +161,8 @@ public class Store {
 
 	public synchronized void sync() {
 		ExecutorService es = Executors.newFixedThreadPool(10);
-		for (Table table : tables.values()) {
-			es.execute(
-			_sync(table)
-			);
+		for (Partition partition : partitions.values()) {
+			es.execute(_sync(partition));
 		}
 
 		es.shutdown();
@@ -177,13 +174,14 @@ public class Store {
 		}
 	}
 
-	private Runnable _sync(final Table table) {
+	private Runnable _sync(final Partition partition) {
 		return new Runnable() {
 
 			public void run() {
-				if (table.exists() || table.create()) {
-					predicateMap.put(table.getName(), table.getPredicate());
-					table.flush();
+				if (partition.exists() || partition.create()) {
+					predicateMap.put(TableName.valueOf(partition.getName()),
+							partition.getPredicate());
+					partition.flush();
 				}
 			}
 		};

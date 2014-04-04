@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Ryan Linneman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,20 +16,18 @@
 
 package edu.umkc.sce.rdf;
 
-import org.apache.hadoop.hbase.TableName;
-
 import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
 
-public interface Table {
+public interface Partition {
 	public void put(Node s, Node o);
 	public ExtendedIterator<Triple> get(Node s, Node o);
 	public boolean exists();
 	public boolean create();
-	public TableAxis getAxis();
+	public PartitionAxis getAxis();
 	public void flush();
 	public Node getPredicate();
-	public TableName getName();
+	public String getName();
 }
 

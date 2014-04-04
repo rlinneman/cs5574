@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Ryan Linneman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +34,7 @@ import com.hp.hpl.jena.graph.Graph;
 import com.hp.hpl.jena.rdf.model.Model;
 import com.hp.hpl.jena.rdf.model.ModelFactory;
 
-import edu.umkc.sce.rdf.Store;
+import edu.umkc.sce.rdf.HBaseStore;
 
 public class VpImport extends Configured implements Tool {
 	public static void main(String[] args) {
@@ -62,10 +62,10 @@ public class VpImport extends Configured implements Tool {
 		String importFile = args[0];
 
 		Model model = null;
-		Store store = null;
-		store = new Store(conf);
-		store.format();
-		model = createModel(store);
+		HBaseStore hBaseStore = null;
+		hBaseStore = new HBaseStore(conf);
+		hBaseStore.format();
+		model = createModel(hBaseStore);
 		try {
 			load(conf, model, importFile);
 		} finally {
@@ -75,10 +75,10 @@ public class VpImport extends Configured implements Tool {
 		return 0;
 	}
 
-	private Model createModel(Store store) {
+	private Model createModel(HBaseStore hBaseStore) {
 		Model model;
 		Graph graph;
-		graph = new edu.umkc.sce.rdf.Graph(store);
+		graph = new edu.umkc.sce.rdf.HBaseVerticallyPartitionedGraph(hBaseStore);
 		model = ModelFactory.createModelForGraph(graph);
 		
 		return model;

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Ryan Linneman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,9 @@ import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.activity.InvalidActivityException;
-
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.TableNotFoundException;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
@@ -41,18 +38,18 @@ import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
 import com.hp.hpl.jena.util.iterator.NiceIterator;
-import com.hp.hpl.jena.util.iterator.NullIterator;
 
-public class RdfTable implements Table {
+public class HBaseVerticalPartition implements Partition {
 	private static final byte[] columnFamilyBytes = Bytes.toBytes("nodes");
 	private static final byte[] emptyStringBytes = Bytes.toBytes("");
 	private final TableName tableName;
 	private final HBaseAdmin admin;
 	private final Node predicate;
-	private final TableAxis axis;
+	private final PartitionAxis axis;
 	private HTable table;
 
-	public RdfTable(TableName tableName, HBaseAdmin admin, Node predicate) {
+	public HBaseVerticalPartition(TableName tableName, HBaseAdmin admin,
+			Node predicate) {
 		if (!predicate.isConcrete())
 			throw new IllegalArgumentException(
 					"this table must represent a concrete node.");
@@ -61,8 +58,8 @@ public class RdfTable implements Table {
 		this.admin = admin;
 		this.predicate = predicate;
 		this.axis = tableName.getNameAsString().endsWith(
-				TableAxis.Subject.toString().toLowerCase()) ? TableAxis.Subject
-				: TableAxis.Object;
+				PartitionAxis.Subject.toString().toLowerCase()) ? PartitionAxis.Subject
+				: PartitionAxis.Object;
 	}
 
 	public ExtendedIterator<Triple> get(Node s, Node o) {
@@ -99,8 +96,8 @@ public class RdfTable implements Table {
 			// get on a specific table
 			gr = getResults(tableName, get);
 			if (gr != null)
-				results = results.andThen(new ResultTripleIterator(gr, s, predicate, o,
-						tableName));
+				results = results.andThen(new ResultTripleIterator(gr, s,
+						predicate, o, tableName));
 		} else {
 
 			Scan scan = new Scan();
@@ -110,8 +107,8 @@ public class RdfTable implements Table {
 			// scan of a single subjects table
 			scanner = getResults(tableName, scan);
 			if (scanner != null) {
-				results = results.andThen(new ResultScannerTripleIterator(scanner, s, predicate, o,
-						tableName));
+				results = results.andThen(new ResultScannerTripleIterator(
+						scanner, s, predicate, o, tableName));
 			}
 
 		}
@@ -159,16 +156,13 @@ public class RdfTable implements Table {
 	public boolean exists() {
 		if (!hasCheckedExists) {
 
+			hasCheckedExists = true;
 			try {
-				HTableDescriptor htd = admin.getTableDescriptor(tableName);
-				_exists = true;
-			} catch (TableNotFoundException e) {
-				_exists = false;
+				_exists = admin.tableExists(tableName);
 			} catch (IOException e) {
+				hasCheckedExists = false;
 				_exists = false;
-			} finally {
-				hasCheckedExists = true;
-			}
+			} 
 		}
 		return _exists;
 	}
@@ -210,14 +204,14 @@ public class RdfTable implements Table {
 
 	}
 
-	public TableAxis getAxis() {
+	public PartitionAxis getAxis() {
 		return axis;
 	}
 
 	public void put(Node s, Node o) {
 		byte[] rowKey, colQualBytes = null;
 
-		if (axis == TableAxis.Subject) {
+		if (axis == PartitionAxis.Subject) {
 			rowKey = Bytes.toBytes(s.toString());
 			colQualBytes = Bytes.toBytes(o.toString());
 		} else {
@@ -288,8 +282,8 @@ public class RdfTable implements Table {
 		return predicate;
 	}
 
-	public TableName getName() {
-		return tableName;
+	public String getName() {
+		return tableName.getNameAsString();
 	}
 
 }

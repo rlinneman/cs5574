@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Ryan Linneman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
-import edu.umkc.sce.rdf.Store;
+import edu.umkc.sce.rdf.HBaseStore;
 
 public class Truncate extends Configured implements Tool {
 	private static final String MY_NAMESPACE = "foo";
@@ -42,8 +42,8 @@ public class Truncate extends Configured implements Tool {
 
 	public int run(String[] args) throws MasterNotRunningException, ZooKeeperConnectionException, IOException {
 
-		Store store = new Store(getConf());
-		store.format();
+		HBaseStore hBaseStore = new HBaseStore(getConf());
+		hBaseStore.format();
 		return 0;
 	}
 }

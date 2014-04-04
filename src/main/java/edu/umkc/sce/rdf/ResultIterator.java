@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2014 Ryan Linneman
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,22 +17,17 @@
 package edu.umkc.sce.rdf;
 
 import java.util.Iterator;
-import java.util.Queue;
-import java.util.concurrent.LinkedBlockingQueue;
 
-import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import com.hp.hpl.jena.datatypes.TypeMapper;
 import com.hp.hpl.jena.graph.Node;
+import com.hp.hpl.jena.graph.NodeFactory;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.rdf.model.AnonId;
 import com.hp.hpl.jena.shared.impl.JenaParameters;
-import com.hp.hpl.jena.util.iterator.ExtendedIterator;
-import com.hp.hpl.jena.util.iterator.NiceIterator;
 
 class ResultTripleIterator implements Iterator<Triple> {
 	final Node subject, predicate, object;
@@ -55,30 +50,16 @@ class ResultTripleIterator implements Iterator<Triple> {
 		this.rowKey = Bytes.toString(result.getRow());
 	}
 
-	//
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see java.util.Iterator#hasNext()
-	 */
 	public boolean hasNext() {
 		boolean hasNext = columns.hasNext();
 		// System.out.printf("ResultTripleIterator:hasNext=%s\n", hasNext);
 		return hasNext;
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see java.util.Iterator#next()
-	 */
 	public Triple next() {
 		return moveNext();
 	}
 
-	/**
-	 * 
-	 */
 	private Triple moveNext() {
 		// System.out.println("ResultTripleIterator:moveNext");
 		String columnName = Bytes.toString(columns.next());
@@ -139,7 +120,7 @@ class ResultTripleIterator implements Iterator<Triple> {
 			String remParts = strNode.substring(strNode.lastIndexOf("\"") + 1);
 			strNode = strNode.substring(1, strNode.lastIndexOf("\""));
 			if (remParts.equalsIgnoreCase(""))
-				node = Node.createLiteral(strNode);
+				node = NodeFactory.createLiteral(strNode);
 			else {
 				String[] parts = remParts.split("\\^\\^");
 				String lang = parts[0].replaceFirst("@", "");
@@ -148,25 +129,19 @@ class ResultTripleIterator implements Iterator<Triple> {
 					type = parts[1];
 				else
 					type = "";
-				node = Node.createLiteral(strNode, lang, TypeMapper
+				node = NodeFactory.createLiteral(strNode, lang, TypeMapper
 						.getInstance().getTypeByName(type));
 			}
 		} else if (strNode.startsWith("_", 0)
 				|| (JenaParameters.disableBNodeUIDGeneration == true && strNode
 						.startsWith("A")))
-			node = Node.createAnon(new AnonId(strNode));
+			node = NodeFactory.createAnon(new AnonId(strNode));
 		else
-			node = Node.createURI(strNode);
+			node = NodeFactory.createURI(strNode);
 
 		return node;
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see java.util.Iterator#remove()
-	 */
-
 	public void remove() {
 		// TODO Auto-generated method stub
 		throw new UnsupportedOperationException();
@@ -174,62 +149,3 @@ class ResultTripleIterator implements Iterator<Triple> {
 
 }
 
-class ResultScannerTripleIterator implements Iterator<Triple> {
-	private final Node subject, predicate, object;
-	private final TableName tableName;
-	private final Iterator<Result> scanner;
-	private ResultTripleIterator current;
-
-	public ResultScannerTripleIterator(ResultScanner scanner, Node subject,
-			Node predicate, Node object, TableName tableName) {
-		this.subject = subject;
-		this.predicate = predicate;
-		this.object = object;
-		this.scanner = scanner.iterator();
-		this.tableName = tableName;
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see java.util.Iterator#hasNext()
-	 */
-
-	public boolean hasNext() {
-		boolean hasNext = scanner.hasNext()
-				|| (current != null && current.hasNext());
-		// System.out.printf("ResultSetTripleIterator:hasNext=%s\n", hasNext);
-		return hasNext;
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see java.util.Iterator#next()
-	 */
-
-	public Triple next() {
-		// System.out.println("ResultSetTripleIterator:moveNext");
-		if (current != null && current.hasNext())
-			return current.next();
-		else if (hasNext()) {
-			current = new ResultTripleIterator(scanner.next(), subject,
-					predicate, object, tableName);
-			return next();
-		} else
-			return null;
-
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see java.util.Iterator#remove()
-	 */
-
-	public void remove() {
-		// TODO Auto-generated method stub
-		throw new UnsupportedOperationException();
-	}
-
-}
