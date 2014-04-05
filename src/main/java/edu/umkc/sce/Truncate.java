@@ -26,8 +26,7 @@ import org.apache.hadoop.util.ToolRunner;
 import edu.umkc.sce.rdf.HBaseStore;
 
 public class Truncate extends Configured implements Tool {
-	private static final String MY_NAMESPACE = "foo";
-
+	
 	public static void main(String[] args) {		
 		Configuration conf = new Configuration();
 		int result;
@@ -42,6 +41,7 @@ public class Truncate extends Configured implements Tool {
 
 	public int run(String[] args) throws MasterNotRunningException, ZooKeeperConnectionException, IOException {
 
+        System.out.println("Invoking Truncate");
 		HBaseStore hBaseStore = new HBaseStore(getConf());
 		hBaseStore.format();
 		return 0;

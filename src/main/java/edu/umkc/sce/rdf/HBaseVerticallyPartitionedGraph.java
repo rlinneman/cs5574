@@ -28,8 +28,8 @@ import com.hp.hpl.jena.graph.TransactionHandler;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.graph.TripleMatch;
 import com.hp.hpl.jena.graph.impl.SimpleEventManager;
-import com.hp.hpl.jena.graph.impl.SimpleTransactionHandler;
 import com.hp.hpl.jena.shared.AddDeniedException;
+import com.hp.hpl.jena.shared.Command;
 import com.hp.hpl.jena.shared.DeleteDeniedException;
 import com.hp.hpl.jena.shared.PrefixMapping;
 import com.hp.hpl.jena.shared.impl.PrefixMappingImpl;
@@ -38,163 +38,202 @@ import com.hp.hpl.jena.util.iterator.NiceIterator;
 import com.hp.hpl.jena.util.iterator.NullIterator;
 import com.sun.tools.corba.se.idl.InvalidArgument;
 
+/** Wraps the logic of translating a {@link Triple} to a {@link Partition} */
 public class HBaseVerticallyPartitionedGraph implements
-		com.hp.hpl.jena.graph.Graph {
+        com.hp.hpl.jena.graph.Graph {
 
-	private static final PartitionAxis[] coreAxis = new PartitionAxis[] {
-			PartitionAxis.Subject, PartitionAxis.Object };
+    private static final PartitionAxis[] coreAxis = new PartitionAxis[] {
+            PartitionAxis.Subject, PartitionAxis.Object };
 
-	private HBaseStore hBaseStore;
-	private PrefixMapping prefixMapping;
-	private TransactionHandler transactionHandler;
-	private GraphEventManager graphEventManager;
+    private HBaseStore hBaseStore;
+    private PrefixMapping prefixMapping;
+    private TransactionHandler transactionHandler;
+    private GraphEventManager graphEventManager;
 
-	public HBaseVerticallyPartitionedGraph(HBaseStore hBaseStore) {
-		this.hBaseStore = hBaseStore;
-		this.prefixMapping = new PrefixMappingImpl();
-		this.transactionHandler = new SimpleTransactionHandler();
-		this.graphEventManager = new SimpleEventManager(this);
-	}
+    public HBaseVerticallyPartitionedGraph(HBaseStore hBaseStore) {
+        this.hBaseStore = hBaseStore;
+        this.prefixMapping = new PrefixMappingImpl();
+        this.transactionHandler = new /* SimpleTransactionHandler() */TransactionHandler() {
 
-	public void add(Triple t) throws AddDeniedException {
-		Node s = t.getSubject(), p = t.getPredicate(), o = t.getObject();
+            @Override
+            public boolean transactionsSupported() {
+                // TODO Auto-generated method stub
+                return false;
+            }
 
-		for (PartitionAxis axis : coreAxis) {
-			Partition partition = null;
-			try {
-				partition = hBaseStore.getPartition(axis, p);
-			} catch (IOException | InvalidArgument e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			if (partition == null)
-				throw new AddDeniedException("Failed to get partition", t);
+            @Override
+            public Object executeInTransaction(Command c) {
+                // TODO Auto-generated method stub
+                return null;
+            }
 
-			partition.put(s, o);
-		}
-	}
+            @Override
+            public void commit() {
+                // TODO Auto-generated method stub
 
-	public ExtendedIterator<Triple> find(Node s, Node p, Node o) {
-		ExtendedIterator<Triple> results = new NiceIterator<Triple>();
-		PartitionAxis axis = PartitionAxis.Subject;
+            }
 
-		// # | S | P | O | ACTION
-		// ------------------------------------------------------------
-		// 0 | T | T | T | Get a subject table
-		// 1 | F | T | T | Get an object table
-		// 2 | T | T | F | Get a subject table
-		// 3 | F | T | F | Scan a subject table
-		// 4 | T | F | T | Get on ALL subject tables
-		// 5 | T | F | F | Get on ALL subject tables
-		// 6 | F | F | T | Get on ALL object tables
-		// 7 | F | F | F | Scan ALL subject tables
+            @Override
+            public void begin() {
+                // TODO Auto-generated method stub
 
-		// toggle the axis iif matching criteria {1,6}
-		if (!s.isConcrete() && o.isConcrete())
-			axis = PartitionAxis.Object;
+            }
 
-		if (p.isConcrete()) {
-			// criteria {0-3}
-			try {
-				Partition partition = hBaseStore.getPartition(axis, p);
-				results = partition.get(s, o);
-			} catch (Exception e) {
-				// failed to garner query scope so bail with no results
-				return NullIterator.instance();
-			}
-		} else {
-			// criteria {4-7}
-			for (Partition partition : hBaseStore.allPartitions(axis)) {
-				ExtendedIterator<Triple> intermediate = partition.get(s, o);
+            @Override
+            public void abort() {
+                // TODO Auto-generated method stub
 
-				if (intermediate.getClass() == NullIterator.class) {
-					intermediate.close();
-					continue;
-				}
+            }
+        };
+        this.graphEventManager = new SimpleEventManager(this);
+    }
 
-				results = results.andThen(intermediate);
-				// if (results != null) {
-				// results.andThen(intermediate);
-				// } else {
-				// results = intermediate;
-				// }
-			}
-		}
-		if (results == null)
-			results = NullIterator.instance();
-		return results;
-	}
+    /**
+     * Inserts {@link Triple}'s indexed by Subject and again by Object in
+     * {@link Partition}'s identified by Predicate and Graph
+     * 
+     * <p>
+     * Note that as of this version only the default graph (unnamed graph) is
+     * supported..
+     * </p>
+     */
+    public void add(Triple t) throws AddDeniedException {
+        Node s = t.getSubject(), p = t.getPredicate(), o = t.getObject();
 
-	public ExtendedIterator<Triple> find(TripleMatch m) {
-		return find(m.getMatchSubject(), m.getMatchPredicate(),
-				m.getMatchObject());
-	}
+        for (PartitionAxis axis : coreAxis) {
+            Partition partition = null;
+            try {
+                partition = hBaseStore.getPartition(axis, p);
+            } catch (IOException | InvalidArgument e) {
+                e.printStackTrace();
+            }
+            if (partition == null)
+                throw new AddDeniedException("Failed to get partition", t);
 
-	public TransactionHandler getTransactionHandler() {
-		return transactionHandler;
-	}
+            partition.put(s, o);
+        }
+    }
 
-	public BulkUpdateHandler getBulkUpdateHandler() {
-		return null;
-	}
+    /**
+     * Resolves the {@link Partition}(s) to process for a given query and
+     * executes the given query against said Partition(s).
+     */
+    public ExtendedIterator<Triple> find(Node s, Node p, Node o) {
+        ExtendedIterator<Triple> results = new NiceIterator<Triple>();
+        PartitionAxis axis = PartitionAxis.Subject;
 
-	public GraphEventManager getEventManager() {
-		return graphEventManager;
-	}
+        // # | S | P | O | Axis
+        // ------------------------------------------------------------
+        // 0 | T | T | T | Subject
+        // 1 | F | T | T | Object
+        // 2 | T | T | F | Subject
+        // 3 | F | T | F | Subject
+        // 4 | T | F | T | *ALL* Subject
+        // 5 | T | F | F | *ALL* Subject
+        // 6 | F | F | T | *ALL* Object
+        // 7 | F | F | F | *ALL* Subject
 
-	public PrefixMapping getPrefixMapping() {
-		return this.prefixMapping;
-	}
+        // toggle the axis iif matching criteria {1,6}
+        if (!s.isConcrete() && o.isConcrete())
+            axis = PartitionAxis.Object;
 
-	public void close() {
-		hBaseStore.sync();
-	}
-	
-	public boolean dependsOn(Graph other) {
-		throw new UnsupportedOperationException();
-	}
+        if (p.isConcrete()) {
+            // criteria {0-3}
+            try {
+                Partition partition = hBaseStore.getPartition(axis, p);
+                results = partition.get(s, o);
+            } catch (Exception e) {
+                // failed to garner query scope so bail with no results
+                return NullIterator.instance();
+            }
+        } else {
+            // criteria {4-7}
+            for (Partition partition : hBaseStore.allPartitions(axis)) {
+                ExtendedIterator<Triple> intermediate = partition.get(s, o);
 
-	public Capabilities getCapabilities() {
-		return null;
-	}
+                if (intermediate.getClass() == NullIterator.class) {
+                    intermediate.close();
+                    continue;
+                }
 
-	public GraphStatisticsHandler getStatisticsHandler() {
-		throw new UnsupportedOperationException();
-	}
+                results = results.andThen(intermediate);
+            }
+        }
+        if (results == null)
+            results = NullIterator.instance();
+        return results;
+    }
 
-	public void delete(Triple t) throws DeleteDeniedException {
-		throw new UnsupportedOperationException();
-	}
+    public ExtendedIterator<Triple> find(TripleMatch m) {
+        return find(m.getMatchSubject(), m.getMatchPredicate(),
+                m.getMatchObject());
+    }
 
-	public boolean isIsomorphicWith(com.hp.hpl.jena.graph.Graph g) {
-		throw new UnsupportedOperationException();
-	}
+    public TransactionHandler getTransactionHandler() {
+        return transactionHandler;
+    }
 
-	public boolean contains(Node s, Node p, Node o) {
-		throw new UnsupportedOperationException();
-	}
+    public BulkUpdateHandler getBulkUpdateHandler() {
+        return null;
+    }
 
-	public boolean contains(Triple t) {
-		throw new UnsupportedOperationException();
-	}
+    public GraphEventManager getEventManager() {
+        return graphEventManager;
+    }
 
-	public void clear() {
-		throw new UnsupportedOperationException();
-	}
+    public PrefixMapping getPrefixMapping() {
+        return this.prefixMapping;
+    }
 
-	public void remove(Node s, Node p, Node o) {
-		throw new UnsupportedOperationException();
-	}
+    public void close() {
+        hBaseStore.sync();
+    }
 
-	public boolean isEmpty() {
-		throw new UnsupportedOperationException();
-	}
+    public boolean dependsOn(Graph other) {
+        throw new UnsupportedOperationException();
+    }
 
-	public int size() {
-		throw new UnsupportedOperationException();
-	}
+    public Capabilities getCapabilities() {
+        return null;
+    }
 
-	public boolean isClosed() {
-		throw new UnsupportedOperationException();
-	}
+    public GraphStatisticsHandler getStatisticsHandler() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void delete(Triple t) throws DeleteDeniedException {
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean isIsomorphicWith(com.hp.hpl.jena.graph.Graph g) {
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean contains(Node s, Node p, Node o) {
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean contains(Triple t) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void clear() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void remove(Node s, Node p, Node o) {
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean isEmpty() {
+        throw new UnsupportedOperationException();
+    }
+
+    public int size() {
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean isClosed() {
+        throw new UnsupportedOperationException();
+    }
 }

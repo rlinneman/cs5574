@@ -16,30 +16,30 @@
 
 package edu.umkc.sce.rdf;
 
+/** just a dummy place holder */
 public class StoreFormatter implements com.hp.hpl.jena.sdb.store.StoreFormatter{
 
 	public void create() {
-		// TODO Auto-generated method stub
-		
+	    throw new UnsupportedOperationException();		
 	}
 
 	public void addIndexes() {
-		// TODO Auto-generated method stub
+	    throw new UnsupportedOperationException();
 		
 	}
 
 	public void dropIndexes() {
-		// TODO Auto-generated method stub
+	    throw new UnsupportedOperationException();
 		
 	}
 
 	public void format() {
-		// TODO Auto-generated method stub
+	    throw new UnsupportedOperationException();
 		
 	}
 
 	public void truncate() {
-		// TODO Auto-generated method stub
+	    throw new UnsupportedOperationException();
 		
 	}
 

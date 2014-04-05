@@ -33,95 +33,96 @@ import org.apache.hadoop.hbase.util.Bytes;
 import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.NodeFactory;
 
+/** HBase persistence provider for {@link Partition} to {@link Node} */
 public class PredicateMap {
-	private final HBaseAdmin admin;
-	private final TableName mapTableName;
-	private HTable mapTable;
+    private final HBaseAdmin admin;
+    private final TableName mapTableName;
+    private HTable mapTable;
 
-	private final Map<TableName, Node> nodes;
+    private final Map<TableName, Node> nodes;
 
-	public PredicateMap(HBaseAdmin admin) {
-		this.admin = admin;
-		mapTableName = TableName.valueOf("rdf".getBytes(), "predicateMap".getBytes());
-		this.nodes = new HashMap<TableName, Node>();
-	}
+    public PredicateMap(HBaseAdmin admin) {
+        this.admin = admin;
+        mapTableName = TableName.valueOf("rdf".getBytes(),
+                "predicateMap".getBytes());
+        this.nodes = new HashMap<TableName, Node>();
+    }
 
-	private HTable getMapTable() throws IOException {
-		if (mapTable == null) {
-			if (!admin.tableExists(mapTableName)) {
-				createTable();
-			}else{
-				mapTable = new HTable(mapTableName, admin.getConnection());
-			}
-		}
-		return mapTable;
-	}
+    private HTable getMapTable() throws IOException {
+        if (mapTable == null) {
+            if (!admin.tableExists(mapTableName)) {
+                createTable();
+            } else {
+                mapTable = new HTable(mapTableName, admin.getConnection());
+            }
+        }
+        return mapTable;
+    }
 
-	private synchronized void createTable() throws IOException {
-		if(mapTable != null)
-			return;
-		if (!admin.tableExists(mapTableName)) {
-			HTableDescriptor htd = new HTableDescriptor(mapTableName);
-			HColumnDescriptor cf = new HColumnDescriptor(
-					"predicateUris".getBytes());
-			htd.addFamily(cf);
-			admin.createTable(htd);
-		}
-		mapTable = new HTable(mapTableName, admin.getConnection());
-	}
+    private synchronized void createTable() throws IOException {
+        if (mapTable != null)
+            return;
+        if (!admin.tableExists(mapTableName)) {
+            HTableDescriptor htd = new HTableDescriptor(mapTableName);
+            HColumnDescriptor cf = new HColumnDescriptor(
+                    "predicateUris".getBytes());
+            htd.addFamily(cf);
+            admin.createTable(htd);
+        }
+        mapTable = new HTable(mapTableName, admin.getConnection());
+    }
 
-	public Node get(TableName tableName) {
-		Node node = null;
-		if (this.nodes.containsKey(tableName)) {
-			node = this.nodes.get(tableName);
-		} else {
-			node = fetch(tableName);
-		}
+    public Node get(TableName tableName) {
+        Node node = null;
+        if (this.nodes.containsKey(tableName)) {
+            node = this.nodes.get(tableName);
+        } else {
+            node = fetch(tableName);
+        }
 
-		return node;
-	}
+        return node;
+    }
 
-	private synchronized Node fetch(TableName tableName) {
-		if (this.nodes.containsKey(tableName)) {
-			return this.nodes.get(tableName);
-		}
-		Node node = null;
-		Get get = new Get(tableName.getNameAsString().getBytes());
-		get.addFamily("predicateUris".getBytes());
-		Result result = null;
-		try {
-			result = getMapTable().get(get);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+    private synchronized Node fetch(TableName tableName) {
+        if (this.nodes.containsKey(tableName)) {
+            return this.nodes.get(tableName);
+        }
+        Node node = null;
+        Get get = new Get(tableName.getNameAsString().getBytes());
+        get.addFamily("predicateUris".getBytes());
+        Result result = null;
+        try {
+            result = getMapTable().get(get);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
 
-		if (result != null && !result.isEmpty()) {
-			String uri = Bytes.toString(result.value());
-			node = NodeFactory.createURI(uri);
-			_put(tableName, node);
-		}
-		return node;
-	}
-	
-	private void _put(TableName tableName, Node node) {
-		Put put = new Put(tableName.getNameAsString().getBytes());
-		put.add("predicateUris".getBytes(), "uri".getBytes(), node.getURI()
-				.getBytes());
-		try {
-			getMapTable().checkAndPut(tableName.getNameAsString().getBytes(),
-					"predicateUris".getBytes(), "uri".getBytes(),
-					null, put);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
+        if (result != null && !result.isEmpty()) {
+            String uri = Bytes.toString(result.value());
+            node = NodeFactory.createURI(uri);
+            _put(tableName, node);
+        }
+        return node;
+    }
 
-	public synchronized void put(TableName predicateName, Node node) {
-		if (!this.nodes.containsKey(predicateName)) {
-			nodes.put(predicateName, node);
-			_put(predicateName, node);
-		}
-	}
+    private void _put(TableName tableName, Node node) {
+        Put put = new Put(tableName.getNameAsString().getBytes());
+        put.add("predicateUris".getBytes(), "uri".getBytes(), node.getURI()
+                .getBytes());
+        try {
+            getMapTable().checkAndPut(tableName.getNameAsString().getBytes(),
+                    "predicateUris".getBytes(), "uri".getBytes(), null, put);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
+    public synchronized void put(TableName predicateName, Node node) {
+        if (!this.nodes.containsKey(predicateName)) {
+            nodes.put(predicateName, node);
+            _put(predicateName, node);
+        }
+    }
 }

@@ -39,251 +39,282 @@ import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
 import com.hp.hpl.jena.util.iterator.NiceIterator;
 
+/**
+ * Manages a {@link Partition} in HBase oriented vertically along the predicate
+ * <p>
+ * responsible for CRUD operations in HBase
+ * </P>
+ */
 public class HBaseVerticalPartition implements Partition {
-	private static final byte[] columnFamilyBytes = Bytes.toBytes("nodes");
-	private static final byte[] emptyStringBytes = Bytes.toBytes("");
-	private final TableName tableName;
-	private final HBaseAdmin admin;
-	private final Node predicate;
-	private final PartitionAxis axis;
-	private HTable table;
+    private static final byte[] columnFamilyBytes = Bytes.toBytes("nodes");
+    private static final byte[] emptyStringBytes = Bytes.toBytes("");
+    private final TableName tableName;
+    private final HBaseAdmin admin;
+    private final Node predicate;
+    private final PartitionAxis axis;
+    private HTable table;
+    /**
+     * Local ASync "write buffer", Still have the HBase write buffer to contend
+     * with.
+     */
+    private List<Put> puts = new ArrayList<Put>();
 
-	public HBaseVerticalPartition(TableName tableName, HBaseAdmin admin,
-			Node predicate) {
-		if (!predicate.isConcrete())
-			throw new IllegalArgumentException(
-					"this table must represent a concrete node.");
+    public HBaseVerticalPartition(TableName tableName, HBaseAdmin admin,
+            Node predicate) {
+        if (!predicate.isConcrete())
+            throw new IllegalArgumentException(
+                    "this table must represent a concrete node.");
 
-		this.tableName = tableName;
-		this.admin = admin;
-		this.predicate = predicate;
-		this.axis = tableName.getNameAsString().endsWith(
-				PartitionAxis.Subject.toString().toLowerCase()) ? PartitionAxis.Subject
-				: PartitionAxis.Object;
-	}
+        this.tableName = tableName;
+        this.admin = admin;
+        this.predicate = predicate;
+        this.axis = tableName.getNameAsString().endsWith(
+                PartitionAxis.Subject.toString().toLowerCase()) ? PartitionAxis.Subject
+                : PartitionAxis.Object;
+    }
 
-	public ExtendedIterator<Triple> get(Node s, Node o) {
-		ExtendedIterator<Triple> results = new NiceIterator<Triple>();
+    public ExtendedIterator<Triple> get(Node s, Node o) {
+        ExtendedIterator<Triple> results = new NiceIterator<Triple>();
 
-		// S | P | O | ACTION
-		// ------------------------------------------------------------
-		// T | T | T | Get a subject table
-		// F | T | T | Get an object table
-		// T | T | F | Get a subject table
-		// F | T | F | Scan a subject table
-		// T | F | T | Get on ALL subject tables
-		// T | F | F | Get on ALL subject tables
-		// F | F | T | Get on ALL object tables
-		// F | F | F | Scan ALL subject tables
+        // S | P | O | ACTION
+        // ------------------------------------------------------------
+        // T | T | T | Get
+        // F | T | T | Get
+        // T | T | F | Get
+        // F | T | F | Scan
 
-		if (s.isConcrete() || o.isConcrete()) {
-			// get... may be across multiple tables
-			Get get;
-			if (s.isConcrete()) {
-				get = new Get(s.toString().getBytes());
+        if (s.isConcrete() || o.isConcrete()) {
+            // get... may be across multiple tables
+            Get get;
+            if (s.isConcrete()) {
+                get = new Get(s.toString().getBytes());
 
-				if (o.isConcrete()) {
-					get.addColumn(columnFamilyBytes, o.toString().getBytes());
-				} else {
-					get.addFamily(columnFamilyBytes);
-				}
-			} else {
-				get = new Get(o.toString().getBytes());
-				get.addFamily(columnFamilyBytes);
-			}
-			Result gr;
+                if (o.isConcrete()) {
+                    get.addColumn(columnFamilyBytes, o.toString().getBytes());
+                } else {
+                    get.addFamily(columnFamilyBytes);
+                }
+            } else {
+                get = new Get(o.toString().getBytes());
+                get.addFamily(columnFamilyBytes);
+            }
+            Result gr;
 
-			// get on a specific table
-			gr = getResults(tableName, get);
-			if (gr != null)
-				results = results.andThen(new ResultTripleIterator(gr, s,
-						predicate, o, tableName));
-		} else {
+            // get on a specific table
+            gr = getResults(tableName, get);
+            if (gr != null)
+                results = results.andThen(new ResultTripleIterator(gr, s,
+                        predicate, o, tableName));
+        } else {
 
-			Scan scan = new Scan();
-			scan.addFamily(columnFamilyBytes);
-			ResultScanner scanner;
+            Scan scan = new Scan();
+            scan.addFamily(columnFamilyBytes);
+            ResultScanner scanner;
 
-			// scan of a single subjects table
-			scanner = getResults(tableName, scan);
-			if (scanner != null) {
-				results = results.andThen(new ResultScannerTripleIterator(
-						scanner, s, predicate, o, tableName));
-			}
+            // scan of a single subjects table
+            scanner = getResults(tableName, scan);
+            if (scanner != null) {
+                results = results.andThen(new HBaseResultScannerTripleIterator(
+                        scanner, s, predicate, o, tableName));
+            }
 
-		}
+        }
 
-		return results;
-	}
+        return results;
+    }
 
-	private ResultScanner getResults(TableName tableName, Scan scan) {
+    private ResultScanner getResults(TableName tableName, Scan scan) {
 
-		ResultScanner result = null;
-		HTable table;
-		try {
-			table = getTable(tableName);
+        ResultScanner result = null;
+        HTable table;
+        try {
+            table = getTable(tableName);
 
-			result = table.getScanner(scan);
+            result = table.getScanner(scan);
 
-			return result;
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
+            return result;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 
-	private Result getResults(TableName tableName, Get get) {
+    private Result getResults(TableName tableName, Get get) {
 
-		Result result = null;
-		HTable table;
-		try {
-			table = getTable(tableName);
+        Result result = null;
+        HTable table;
+        try {
+            table = getTable(tableName);
 
-			result = table.get(get);
+            result = table.get(get);
 
-			if (result != null && !result.isEmpty()) {
-				return result;
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
+            if (result != null && !result.isEmpty()) {
+                return result;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 
-	boolean hasCheckedExists;
-	boolean _exists;
+    boolean hasCheckedExists;
+    boolean _exists;
 
-	public boolean exists() {
-		if (!hasCheckedExists) {
+    public boolean exists() {
+        if (!hasCheckedExists) {
 
-			hasCheckedExists = true;
-			try {
-				_exists = admin.tableExists(tableName);
-			} catch (IOException e) {
-				hasCheckedExists = false;
-				_exists = false;
-			} 
-		}
-		return _exists;
-	}
+            hasCheckedExists = true;
+            try {
+                _exists = admin.tableExists(tableName);
+            } catch (IOException e) {
+                hasCheckedExists = false;
+                _exists = false;
+            }
+        }
+        return _exists;
+    }
 
-	private HTable getTable(TableName tableName) throws IOException {
-		if (table == null) {
-			table = new HTable(tableName, admin.getConnection());
-		}
-		return table;
-	}
+    private HTable getTable(TableName tableName) throws IOException {
+        if (table == null) {
+            table = new HTable(tableName, admin.getConnection());
+        }
+        return table;
+    }
 
-	/**
-	 * Create the underlying {@link HTable} if it does not exist
-	 * 
-	 * returns true if the table was successfully created or already exists.
-	 */
-	public synchronized boolean create() {
-		if (table != null)
-			// throw new IllegalStateException("table is already loaded");
-			return true;
+    /**
+     * Create the underlying {@link HTable} if it does not exist
+     * 
+     * returns true if the table was successfully created or already exists.
+     */
+    public synchronized boolean create() {
+        if (table != null)
+            // throw new IllegalStateException("table is already loaded");
+            return true;
 
-		try {
-			if (!admin.tableExists(tableName)) {
-				HTableDescriptor desc = new HTableDescriptor(tableName);
-				HColumnDescriptor cf = new HColumnDescriptor("nodes".getBytes());
-				desc.addFamily(cf);
-				admin.createTable(desc);
-				table = new HTable(tableName, admin.getConnection());
-				table.setAutoFlush(false, true);
-				hasCheckedExists = _exists = true;
-			}
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return false;
-		}
+        try {
+            if (!admin.tableExists(tableName)) {
+                HTableDescriptor desc = new HTableDescriptor(tableName);
+                HColumnDescriptor cf = new HColumnDescriptor("nodes".getBytes());
+                desc.addFamily(cf);
+                admin.createTable(desc);
+                table = new HTable(tableName, admin.getConnection());
+                table.setAutoFlush(false, true);
+                hasCheckedExists = _exists = true;
+            }
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return false;
+        }
 
-		return true;
+        return true;
 
-	}
+    }
 
-	public PartitionAxis getAxis() {
-		return axis;
-	}
+    public PartitionAxis getAxis() {
+        return axis;
+    }
 
-	public void put(Node s, Node o) {
-		byte[] rowKey, colQualBytes = null;
+    public void put(Node s, Node o) {
+        byte[] rowKey, colQualBytes = null;
 
-		if (axis == PartitionAxis.Subject) {
-			rowKey = Bytes.toBytes(s.toString());
-			colQualBytes = Bytes.toBytes(o.toString());
-		} else {
-			rowKey = Bytes.toBytes(o.toString());
-			colQualBytes = Bytes.toBytes(s.toString());
-		}
+        if (axis == PartitionAxis.Subject) {
+            rowKey = Bytes.toBytes(s.toString());
+            colQualBytes = Bytes.toBytes(o.toString());
+        } else {
+            rowKey = Bytes.toBytes(o.toString());
+            colQualBytes = Bytes.toBytes(s.toString());
+        }
 
-		Put update = new Put(rowKey);
+        Put update = new Put(rowKey);
 
-		update.add(columnFamilyBytes, colQualBytes, emptyStringBytes);
-		// try {
-		// if (!exists())
-		// create();
-		//
-		// getTable(tableName).checkAndPut(rowKey, columnFamilyBytes,
-		// colQualBytes, null, update);
-		// } catch (IOException e) {
-		// // TODO Auto-generated catch block
-		// e.printStackTrace();
-		// }
-		puts.add(update);
-		update = null;
-		rowKey = null;
-		colQualBytes = null;
-	}
+        update.add(columnFamilyBytes, colQualBytes, emptyStringBytes);
 
-	public static String getNameOfNode(Node node) {
-		String pred = null;
-		if (node.isURI())
-			pred = node.getLocalName();
-		else if (node.isBlank())
-			pred = node.getBlankNodeLabel();
-		else if (node.isLiteral())
-			pred = node.getLiteralValue().toString();
-		else
-			pred = node.toString();
-		return pred;
-	}
+        try {
+            if (!exists())
+                create();
 
-	private List<Put> puts = new ArrayList<Put>();
+            getTable(tableName).checkAndPut(rowKey, columnFamilyBytes,
+                    colQualBytes, null, update);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        update = null;
+        rowKey = null;
+        colQualBytes = null;
+    }
 
-	public synchronized void flush() {
-		if (!puts.isEmpty()) {
-			try {
-				HTable ht = getTable(tableName);
-				ht.put(puts);
-				puts.clear();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
+    public void putAsync(Node s, Node o) {
+        byte[] rowKey, colQualBytes = null;
 
-		if (table != null) {
-			try {
-				table.flushCommits();
-			} catch (RetriesExhaustedWithDetailsException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (InterruptedIOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-	}
+        if (axis == PartitionAxis.Subject) {
+            rowKey = Bytes.toBytes(s.toString());
+            colQualBytes = Bytes.toBytes(o.toString());
+        } else {
+            rowKey = Bytes.toBytes(o.toString());
+            colQualBytes = Bytes.toBytes(s.toString());
+        }
 
-	public Node getPredicate() {
-		return predicate;
-	}
+        Put update = new Put(rowKey);
 
-	public String getName() {
-		return tableName.getNameAsString();
-	}
+        update.add(columnFamilyBytes, colQualBytes, emptyStringBytes);
+
+        puts.add(update);
+        update = null;
+        rowKey = null;
+        colQualBytes = null;
+    }
+
+    /**
+     * <p>
+     * This method courtesy of Copyright © 2010, 2011, 2012 Talis Systems Ltd.
+     * </p>
+     */
+    public static String getNameOfNode(Node node) {
+        String pred = null;
+        if (node.isURI())
+            pred = node.getLocalName();
+        else if (node.isBlank())
+            pred = node.getBlankNodeLabel();
+        else if (node.isLiteral())
+            pred = node.getLiteralValue().toString();
+        else
+            pred = node.toString();
+        return pred;
+    }
+
+    /** Push all ASync writes to HBase in bulk and flush the write buffers */
+    public synchronized void flush() {
+        if (!puts.isEmpty()) {
+            try {
+                HTable ht = getTable(tableName);
+                ht.put(puts);
+                puts.clear();
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+
+        if (table != null) {
+            try {
+                table.flushCommits();
+            } catch (RetriesExhaustedWithDetailsException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            } catch (InterruptedIOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public Node getPredicate() {
+        return predicate;
+    }
+
+    public String getName() {
+        return tableName.getNameAsString();
+    }
 
 }

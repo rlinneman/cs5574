@@ -16,6 +16,7 @@
 
 package edu.umkc.sce.rdf;
 
+/** Represents the various axis RDF data may pivot on.*/
 public enum PartitionAxis {
 	Graph, Subject, Predicate, Object
 }

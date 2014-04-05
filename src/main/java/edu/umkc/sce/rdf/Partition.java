@@ -20,6 +20,7 @@ import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.Triple;
 import com.hp.hpl.jena.util.iterator.ExtendedIterator;
 
+/** Represents a generic container of a partition of RDF Triples data */
 public interface Partition {
 	public void put(Node s, Node o);
 	public ExtendedIterator<Triple> get(Node s, Node o);

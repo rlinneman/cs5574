@@ -24,7 +24,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
@@ -52,6 +51,7 @@ public class VpImport extends Configured implements Tool {
 	public int run(String[] args) throws Exception {
 		Configuration conf = getConf();
 
+		System.out.println("Invoking Import");
 		GenericOptionsParser parser = new GenericOptionsParser(conf, args);
 		args = parser.getRemainingArgs();
 		if (args.length != 1) {
