@@ -16,22 +16,21 @@
 
 package edu.umkc.sce;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStreamReader;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Iterator;
 
+import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.codec.digest.MessageDigestAlgorithms;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-import org.apache.jena.riot.RDFLanguages;
-
 import com.hp.hpl.jena.graph.Graph;
 import com.hp.hpl.jena.query.QueryExecution;
 import com.hp.hpl.jena.query.QueryExecutionFactory;
+import com.hp.hpl.jena.query.QuerySolution;
 import com.hp.hpl.jena.query.ResultSet;
 import com.hp.hpl.jena.query.ResultSetFormatter;
 import com.hp.hpl.jena.rdf.model.Model;
@@ -42,7 +41,7 @@ import edu.umkc.sce.rdf.HBaseStore;
 public class VpQuery extends Configured implements Tool {
 	public static void main(String[] args) {
 		Configuration conf = new Configuration();
-		
+
 		int result;
 		try {
 			result = ToolRunner.run(conf, new VpQuery(), args);
@@ -94,31 +93,36 @@ public class VpQuery extends Configured implements Tool {
 					+ "?x <http://purl.uniprot.org/core/mnemonic> \"003L_IIV3\" . "
 					+ "?x <http://purl.uniprot.org/core/citation> ?z . "
 					+ "?z <http://purl.uniprot.org/core/author> ?a . "
-					+ "} order by ?x"
-	};
+					+ "} order by ?x" };
+	String[] hashes = new String[] {
+"1a4a845d8e7f1d13593a3dcf42928229",
+"0538ce358c70541d5f2e330b863de5a4",
+"91135bf61377b7757ca9bdd4b85837aa",
+"e7e2a0df7cdca98456040f28fe9e8719",
+"66c1de58f28dcc1bf71b1ac78f1296ac",
+"bc326806218a50989af732c3e85faafc",
+"f88077c3d2debb9de1a25dc4fec99464",
+"03e8116e8953d226fa65205e2c415121"
+//			"15074267b6e509235b8834067dd9de39",
+//			"dd4af557d075f65aa33cc66faf3a4e63",
+//			"d56d6e825058dd16b7492009200e92ac",
+//			"31ea05fac7e8b71231fef736218c688d",
+//			"c2f43905853f2dada5131370649f1fcf",
+//			"b34453a92903b3f4d63369e473e507d2",
+//			"0bfa0c4a57959571716cf440b16e1b18",
+//			"1f4a87c167173a6a29e5a700df26e1e2" 
+			};
 
 	public int run(String[] args) throws Exception {
 		Configuration conf = getConf();
-        System.out.println("Invoking Query tests");
+		System.out.println("Invoking Query tests");
 
 		GenericOptionsParser parser = new GenericOptionsParser(conf, args);
 		args = parser.getRemainingArgs();
-		if (args.length != 1) {
-			GenericOptionsParser.printGenericCommandUsage(System.out);
-			System.exit(2);
-		}
-
-		String importFile = args[0];
-		FileSystem fs = null;
-		BufferedReader br = null;
-		Model m = null;
-
-		fs = FileSystem.get(conf);
-		Path path = new Path(importFile);
-		br = new BufferedReader(new InputStreamReader(fs.open(path)));
-		m = ModelFactory.createDefaultModel();
-		m.read(br, null, RDFLanguages.strLangNTriples);
-		br.close();
+		// if (args.length != 1) {
+		// GenericOptionsParser.printGenericCommandUsage(System.out);
+		// System.exit(2);
+		// }
 
 		Model model = null;
 		HBaseStore hBaseStore = null;
@@ -128,11 +132,12 @@ public class VpQuery extends Configured implements Tool {
 		try {
 			int queryIndex = 0;
 			for (String query : queries) {
-				runTestQuery(queryIndex, model, query, m);
+				runTestQuery(queryIndex, model, query);
 				queryIndex += 1;
 			}
 		} finally {
-			model.close();
+			// m.close();
+			// model.close();
 		}
 
 		return 0;
@@ -147,40 +152,50 @@ public class VpQuery extends Configured implements Tool {
 		return model;
 	}
 
-	private void runTestQuery(int queryIndex, Model model, String query, Model m) {
+	private void runTestQuery(int queryIndex, Model model, String query) {
 		System.out.printf("executing [%d] %s", queryIndex, query);
-		QueryExecution qe = QueryExecutionFactory.create(query, m);
-		String result1, result2;
+		QueryExecution qe = null;
+		String result = null;
 		try {
-			ResultSet results = qe.execSelect();
-
-			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			ResultSetFormatter.out(baos, results);
-
-			result1 = baos.toString();
-			qe.close();
 
 			qe = QueryExecutionFactory.create(query, model);
-			baos = new ByteArrayOutputStream();
-			results = qe.execSelect();
-			ResultSetFormatter.out(baos, results);
-			result2 = baos.toString();
+			ResultSet results = qe.execSelect();
+			byte[] hash = getResultHash(results); 
+
+			result = Hex.encodeHexString(hash);
+			
+			ResultSetFormatter.out(System.out, results);
 		} finally {
+
 			qe.close();
 		}
 		System.out.flush();
-		if (result1.equalsIgnoreCase(result2)) {
+		if (hashes[queryIndex].equalsIgnoreCase(result)) {
 			System.out.printf("\nQuery [%d] passed assertion\n\n", queryIndex);
 
 		} else {
-			System.out.flush();
-			// System.err.printf(
-			// "\nQuery [%d] failed assertion expected:\n%s\nactual:\n%s",
-			// queryIndex, result1, result2);
-			System.err.printf("\nQuery [%d] failed assertion\n", queryIndex,
-					result1, result2);
-			System.err.flush();
+			System.err.printf("\nQuery [%d] failed assertion %s\n", queryIndex,
+					result);
 		}
 	}
 
+	byte[] getResultHash(ResultSet results) {
+		MessageDigest md = null;
+		;
+		try {
+			md = MessageDigest.getInstance(MessageDigestAlgorithms.MD5);
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		while (results.hasNext()) {
+			QuerySolution sol = results.nextSolution();
+			Iterator<String> col = sol.varNames();
+			while (col.hasNext()) {
+				md.update(sol.get(col.next()).asNode().toString().getBytes());
+			}
+		}
+		return md.digest();
+	}
 }

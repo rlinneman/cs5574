@@ -56,11 +56,18 @@ public class VpImport extends Configured implements Tool {
 		args = parser.getRemainingArgs();
 		if (args.length != 1) {
 			GenericOptionsParser.printGenericCommandUsage(System.out);
+			System.out.println(args.length);
 			System.exit(2);
 		}
 
 		String importFile = args[0];
-
+//		conf.set("fs.hdfs.impl", 
+//				
+//		        org.apache.hadoop.hdfs.DistributedFileSystem.class.getName()
+//		    );
+//		conf.set("fs.file.impl",
+//		        org.apache.hadoop.fs.LocalFileSystem.class.getName()
+//		    );
 		Model model = null;
 		HBaseStore hBaseStore = null;
 		hBaseStore = new HBaseStore(conf);

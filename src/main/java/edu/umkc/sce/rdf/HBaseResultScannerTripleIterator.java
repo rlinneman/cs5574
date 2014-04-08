@@ -25,11 +25,12 @@ import org.apache.hadoop.hbase.client.ResultScanner;
 import com.hp.hpl.jena.graph.Node;
 import com.hp.hpl.jena.graph.Triple;
 
+/** Iterates a collection of rows from HBase */
 class HBaseResultScannerTripleIterator implements Iterator<Triple> {
 	private final Node subject, predicate, object;
 	private final TableName tableName;
 	private final Iterator<Result> scanner;
-	private ResultTripleIterator current;
+	private Iterator<Triple> current;
 
 	public HBaseResultScannerTripleIterator(ResultScanner scanner, Node subject,
 			Node predicate, Node object, TableName tableName) {
@@ -53,7 +54,7 @@ class HBaseResultScannerTripleIterator implements Iterator<Triple> {
 		if (current != null && current.hasNext())
 			return current.next();
 		else if (hasNext()) {
-			current = new ResultTripleIterator(scanner.next(), subject,
+			current = new HBaseResultIterator(scanner.next(), subject,
 					predicate, object, tableName);
 			return next();
 		} else

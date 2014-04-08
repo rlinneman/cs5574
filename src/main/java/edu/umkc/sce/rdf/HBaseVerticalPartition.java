@@ -103,7 +103,7 @@ public class HBaseVerticalPartition implements Partition {
             // get on a specific table
             gr = getResults(tableName, get);
             if (gr != null)
-                results = results.andThen(new ResultTripleIterator(gr, s,
+                results = results.andThen(new HBaseResultIterator(gr, s,
                         predicate, o, tableName));
         } else {
 

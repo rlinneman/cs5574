@@ -30,13 +30,13 @@ import com.hp.hpl.jena.rdf.model.AnonId;
 import com.hp.hpl.jena.shared.impl.JenaParameters;
 
 /** Iterates the columns of a "row" from HBase yielding {@link Triple}s */
-class ResultTripleIterator implements Iterator<Triple> {
+class HBaseResultIterator implements Iterator<Triple> {
     final Node subject, predicate, object;
     final Result result;
     final Iterator<byte[]> columns;
     final String rowKey;
 
-    public ResultTripleIterator(Result result, Node subject, Node predicate,
+    public HBaseResultIterator(Result result, Node subject, Node predicate,
             Node object, TableName tableName) {
         this.subject = subject;
         this.predicate = predicate.isConcrete() ? predicate
