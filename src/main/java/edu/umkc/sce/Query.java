@@ -6,6 +6,7 @@ import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
+import com.google.common.base.Stopwatch;
 import com.hp.hpl.jena.graph.Graph;
 import com.hp.hpl.jena.query.QueryExecution;
 import com.hp.hpl.jena.query.QueryExecutionFactory;
@@ -53,10 +54,12 @@ public class Query extends Configured implements Tool {
 		try {
 
 			QueryExecution qe = QueryExecutionFactory.create(query, model);
-			System.out.printf("executing  %s...\n", query);
-
+			Stopwatch sw = new Stopwatch();
+			sw.start();
 			ResultSet results = qe.execSelect();
+			sw.stop();
 			ResultSetFormatter.out(System.out, results);
+			System.out.printf("%d Results in %dms\n", results.getRowNumber(), sw.elapsedMillis());
 		}catch(Exception e){ 
 			e.printStackTrace(System.err);
 		}finally {
