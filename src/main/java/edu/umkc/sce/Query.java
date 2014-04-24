@@ -57,12 +57,15 @@ public class Query extends Configured implements Tool {
 			Stopwatch sw = new Stopwatch();
 			sw.start();
 			ResultSet results = qe.execSelect();
-			sw.stop();
+			long dbTime = sw.elapsedMillis();
 			ResultSetFormatter.out(System.out, results);
-			System.out.printf("%d Results in %dms\n", results.getRowNumber(), sw.elapsedMillis());
-		}catch(Exception e){ 
+			sw.stop();
+			System.out.printf("%d Results in %d.%ds (%d.%ds in db io)\n",
+					results.getRowNumber(), sw.elapsedMillis() / 1000,
+					sw.elapsedMillis() % 1000, dbTime / 1000, dbTime % 1000);
+		} catch (Exception e) {
 			e.printStackTrace(System.err);
-		}finally {
+		} finally {
 			model.close();
 		}
 
